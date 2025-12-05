@@ -6,15 +6,11 @@ from datetime import datetime
 # Глобальный список подключенных клиентов (в этом модуле)
 connected_clients = set()
 
-# Обработчики событий теперь в app.py, здесь только фоновые задачи
-print('📝 WebSocket module loaded (handlers in app.py)')
 
 def emit_server_time():
     """Отправка серверного времени каждую секунду"""
     # Небольшая задержка перед началом, чтобы клиенты успели подключиться
-    print('🕐 Starting server time emitter...')
     socketio.sleep(2)
-    print('🕐 Server time emitter started, beginning to emit...')
     
     while True:
         try:
@@ -29,11 +25,9 @@ def emit_server_time():
                     'timestamp': now.timestamp(),
                     'formatted': formatted_time
                 })
-                print(f'🕐 ✅ Emitted server_time: {formatted_time}')
             
             socketio.sleep(1)
         except Exception as e:
-            print(f'❌ Error emitting server time: {e}')
             import traceback
             traceback.print_exc()
             socketio.sleep(1)
@@ -44,9 +38,7 @@ def emit_price_updates():
     from models import get_db
     import requests
     
-    print('💰 Starting price updates emitter...')
     socketio.sleep(2)  # Небольшая задержка перед началом
-    print('💰 Price updates emitter started...')
     
     while True:
         try:
@@ -88,7 +80,7 @@ def emit_price_updates():
                                     'price': price,
                                     'timestamp': datetime.utcnow().timestamp()
                                 })
-                                print(f'💰 Emitted price_update for pair {pair_id} ({symbol}): {price}')
+                                
                             except Exception as e:
                                 print(f'Error emitting price for pair {pair_id}: {e}')
                     except Exception as e:
@@ -102,7 +94,7 @@ def emit_price_updates():
                                     'price': price,
                                     'timestamp': datetime.utcnow().timestamp()
                                 })
-                                print(f'💰 Emitted price_update for pair {pair_id} ({symbol}): {price}')
+                                
                             except Exception as e:
                                 print(f'Error emitting price for pair {pair_id}: {e}')
                     
