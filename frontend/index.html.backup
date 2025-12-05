@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LYNX - Trading Platform</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <!-- Top Header -->
+    <header class="top-header">
+        <div class="header-left">
+            <div class="logo">LYNX</div>
+            <div class="menu-icon">☰</div>
+            <div class="pairs-selector">
+                <div class="selected-pair" id="selectedPair">
+                    <span class="pair-name">Bitcoin Crypto</span>
+                </div>
+                <button class="add-pair-btn" id="addPairBtn">+</button>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="account-info">
+                <span class="account-type">Demo Account</span>
+                <span class="balance" id="balance">R$ 10.000,00</span>
+            </div>
+            <div class="server-time-header" id="serverTimeHeader">00:00:00</div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Left Sidebar -->
+        <aside class="left-sidebar">
+            <div class="timeframe-selector">
+                <button class="timeframe-btn active" data-timeframe="1m">1m</button>
+                <button class="timeframe-btn" data-timeframe="5m">5m</button>
+                <button class="timeframe-btn" data-timeframe="15m">15m</button>
+                <button class="timeframe-btn" data-timeframe="1h">1h</button>
+            </div>
+            <div class="tools-section">
+                <div class="tool-icon">📊</div>
+                <div class="tool-icon">📈</div>
+                <div class="tool-icon">✏️</div>
+                <div class="tool-icon">📐</div>
+                <div class="tool-icon">🔍</div>
+                <div class="tool-icon">⚙️</div>
+            </div>
+        </aside>
+
+        <!-- Chart Area -->
+        <main class="chart-area">
+            <div class="chart-header">
+                <div class="candle-info" id="candleInfo">O 0.00000 H 0.00000 L 0.00000 C 0.00000 +0.0000 (+0.00%)</div>
+            </div>
+            <div class="chart-container" id="chartContainer"></div>
+            <div class="chart-footer">
+                <div class="live-price" id="livePrice">0.00000</div>
+                <div class="time-remaining" id="timeRemaining">00:00</div>
+            </div>
+        </main>
+
+        <!-- Right Sidebar - Trading Panel -->
+        <aside class="right-sidebar">
+            <div class="trading-panel">
+                <div class="panel-section">
+                    <label>Time</label>
+                    <div class="time-selector">
+                        <button class="time-btn" id="timeDown">-</button>
+                        <span class="time-value" id="timeValue">1 min.</span>
+                        <button class="time-btn" id="timeUp">+</button>
+                    </div>
+                </div>
+                
+                <div class="panel-section">
+                    <label>Amount</label>
+                    <div class="amount-selector">
+                        <button class="amount-btn" id="amountDown">-</button>
+                        <input type="text" class="amount-input" id="amountInput" value="5.00">
+                        <button class="amount-btn" id="amountUp">+</button>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <div class="profit-info">
+                        <span>Profit 85%</span>
+                        <span class="profit-amount" id="profitAmount">+R$ 0,00</span>
+                    </div>
+                </div>
+
+                <div class="trading-buttons">
+                    <button class="buy-btn" id="buyBtn">BUY</button>
+                    <button class="sell-btn" id="sellBtn">SELL</button>
+                </div>
+
+                <div class="active-rounds" id="activeRounds">
+                    <div class="rounds-title">Active Rounds</div>
+                    <div class="rounds-list" id="roundsList"></div>
+                </div>
+
+                <div class="server-time-footer">
+                    Server time: <span id="serverTimeFooter">00:00:00</span>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Add Pair Modal -->
+    <div class="modal" id="addPairModal">
+        <div class="modal-content">
+            <span class="close" id="closeModal">&times;</span>
+            <h2>Add Trading Pair</h2>
+            <div class="search-container">
+                <input type="text" id="pairSearch" class="pair-search" placeholder="Search pairs...">
+            </div>
+            <div class="available-pairs" id="availablePairs"></div>
+        </div>
+    </div>
+
+    <script src="js/chart.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
+

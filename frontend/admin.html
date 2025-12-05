@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LYNX - Admin Panel</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        .admin-container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 30px;
+            background: #131829;
+            border-radius: 8px;
+            border: 1px solid #1e2330;
+        }
+        
+        .admin-header {
+            margin-bottom: 30px;
+        }
+        
+        .admin-header h1 {
+            color: #fff;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .admin-header p {
+            color: #8b8fa3;
+            font-size: 14px;
+        }
+        
+        .admin-section {
+            margin-bottom: 30px;
+        }
+        
+        .admin-section label {
+            display: block;
+            color: #8b8fa3;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+        
+        .win-rate-input {
+            width: 100%;
+            padding: 12px;
+            background: #1e2330;
+            border: 1px solid #2a2f3f;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 16px;
+            outline: none;
+        }
+        
+        .win-rate-input:focus {
+            border-color: #ff6b35;
+        }
+        
+        .win-rate-info {
+            margin-top: 10px;
+            padding: 12px;
+            background: #1e2330;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #8b8fa3;
+        }
+        
+        .save-btn {
+            width: 100%;
+            padding: 16px;
+            background: #ff6b35;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        .save-btn:hover {
+            opacity: 0.9;
+        }
+        
+        .save-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .message {
+            margin-top: 20px;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .message.success {
+            background: #22c55e;
+            color: #fff;
+            display: block;
+        }
+        
+        .message.error {
+            background: #ef4444;
+            color: #fff;
+            display: block;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #8b8fa3;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        
+        .back-link:hover {
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <a href="index.html" class="back-link">← Вернуться к торговле</a>
+        
+        <div class="admin-header">
+            <h1>Админ-панель</h1>
+            <p>Управление настройками торговой платформы</p>
+        </div>
+        
+        <div class="admin-section">
+            <label for="winRateInput">Процент выигрыша (0-100)</label>
+            <input 
+                type="number" 
+                id="winRateInput" 
+                class="win-rate-input" 
+                min="0" 
+                max="100" 
+                value="50"
+            >
+            <div class="win-rate-info">
+                <div>0% - пользователь всегда проигрывает</div>
+                <div>50% - случайный результат (50/50)</div>
+                <div>100% - пользователь всегда выигрывает</div>
+            </div>
+        </div>
+        
+        <button class="save-btn" id="saveBtn">Сохранить</button>
+        
+        <div class="message" id="message"></div>
+    </div>
+    
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+        
+        // Загрузка текущего значения
+        async function loadWinRate() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/win-rate`);
+                const data = await response.json();
+                document.getElementById('winRateInput').value = data.win_rate;
+            } catch (error) {
+                console.error('Error loading win rate:', error);
+                showMessage('Ошибка загрузки данных', 'error');
+            }
+        }
+        
+        // Сохранение значения
+        async function saveWinRate() {
+            const winRate = parseInt(document.getElementById('winRateInput').value);
+            
+            if (isNaN(winRate) || winRate < 0 || winRate > 100) {
+                showMessage('Введите число от 0 до 100', 'error');
+                return;
+            }
+            
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Сохранение...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin/win-rate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ win_rate: winRate }),
+                });
+                
+                if (response.ok) {
+                    showMessage('Настройки успешно сохранены', 'success');
+                } else {
+                    const error = await response.json();
+                    showMessage(error.error || 'Ошибка при сохранении', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving win rate:', error);
+                showMessage('Ошибка при сохранении', 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Сохранить';
+            }
+        }
+        
+        function showMessage(text, type) {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = text;
+            messageEl.className = `message ${type}`;
+            
+            setTimeout(() => {
+                messageEl.className = 'message';
+            }, 3000);
+        }
+        
+        // Обработчики событий
+        document.getElementById('saveBtn').addEventListener('click', saveWinRate);
+        
+        document.getElementById('winRateInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                saveWinRate();
+            }
+        });
+        
+        // Загрузка при инициализации
+        loadWinRate();
+    </script>
+</body>
+</html>
+
+

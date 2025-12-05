@@ -1,0 +1,1223 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    padding: 0;
+    margin: 0 !important;
+    line-height: inherit !important;
+    overflow: hidden !important;
+    background-color: #000000 !important;
+    font-family: 'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.mt-4{
+    margin-top: 1.5rem !important;
+}
+
+.mb-4{
+    margin-bottom: 1.5rem !important;
+}
+
+* {
+    font-family: 'Raleway', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+*:hover {
+    text-decoration: none !important;
+}
+
+*:focus {
+    outline: none !important;
+}
+
+*::-webkit-scrollbar-track {
+    -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.3);
+    background-color: transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 2px;
+    background-color: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, .2);
+}
+
+/* Header */
+#header {
+    display: flex;
+    display: -webkit-flex;
+    border-bottom: 1px solid #393b3f;
+    z-index: 1000;
+    position: fixed;
+    width: 100%;
+    background: #000 !important;
+    height: 74px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0;
+}
+
+#header *,
+#header * ::after,
+#header * ::before {
+    box-sizing: initial !important;
+}
+
+#header .logo {
+    flex: 1;
+    min-width: 80px;
+}
+
+#header .logo a {
+    display: block;
+    text-align: center;
+    padding: 12px 10px;
+}
+
+#header .logo img {
+    margin-top: 10px;
+    width: 85%;
+}
+
+.logo.desktop-only {
+    display: flex;
+    align-items: center;
+    margin-right: 0;
+}
+
+.logo.desktop-only img {
+    height: auto;
+    max-height: 40px;
+    width: auto;
+}
+
+#header .wintabs {
+    flex: 7;
+    overflow: auto;
+}
+
+#header #tabs {
+    padding: 10px;
+    white-space: nowrap;
+}
+
+#header #tabs .icon-item {
+    margin-right: 10px;
+    display: inline-block;
+    background: transparent;
+    color: #ffffff75;
+    font-size: 20px;
+    padding: 11px 15px 14px 15px;
+    border: 1px solid #ffffff1f;
+    border-radius: 3px;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+#header #tabs .icon-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#header #tabs .icon-item .material-symbols-outlined {
+    font-size: 24px;
+    color: #ffffff75;
+    height: 24px !important;
+}
+
+#header #tabs .icon-item.btn-deposit-mobile {
+    display: none;
+}
+
+#header #tabs .item {
+    width: 112px;
+    min-width: 112px;
+    padding: 10px;
+    border: 1px solid #ffffff1f;
+    border-radius: 3px;
+    position: relative;
+    cursor: pointer;
+    margin-right: 10px;
+    display: inline-block;
+}
+
+#header #tabs .item.active {
+    border-bottom: 3px solid #abd704;
+}
+
+#header #tabs .item.active,
+#header #tabs .item:hover {
+    background: #ffffff26;
+    border-top: 1px solid transparent;
+    border-right: 1px solid transparent;
+    border-left: 1px solid transparent;
+}
+
+#header #tabs .item img {
+    max-width: 30px;
+    float: left;
+    margin-right: 7px;
+}
+
+#header #tabs .item .title {
+    color: #FFF;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+#header #tabs .item .description {
+    color: #ffffff75;
+    font-size: 12px;
+}
+
+#header #tabs .item button,
+#header #tabs .item button.close {
+    color: #ffffff70;
+    background: transparent;
+    border: 0;
+    position: absolute;
+    margin: 0;
+    padding: 0;
+    top: 3px;
+    left: 3px;
+    right: auto;
+    bottom: auto;
+    z-index: 10;
+    display: block;
+    visibility: visible;
+    width: auto;
+    height: auto;
+    transform: none;
+}
+
+#header #tabs .item.active button,
+#header #tabs .item.active button.close {
+    color: #ffffff70;
+    display: block;
+    visibility: visible;
+}
+
+#header #tabs .item button:hover,
+#header #tabs .item button.close:hover {
+    color: #FFF;
+}
+
+#header #tabs .item button .zli,
+#header #tabs .item button.close .zli {
+    font-size: 14px;
+    cursor: pointer;
+    display: block;
+    line-height: 1;
+}
+
+#header .user-top {
+    flex: 4;
+    margin-right: 0;
+    padding-right: 3px;
+}
+
+#header .user-top .row {
+    display: flex;
+    display: -webkit-flex;
+    justify-content: flex-end;
+}
+
+.user-top {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    margin-left: 20px;
+}
+
+.user-top .row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    /* gap: 15px; */
+}
+
+#header .user-top .account {
+    flex: 3;
+    min-width: 330px;
+    color: #ffffff82;
+    padding: 14px 10px;
+    font-size: 12px;
+    text-align: right;
+}
+
+#header .user-top .account:hover {
+    cursor: pointer;
+    opacity: .9;
+}
+
+#header .user-top .account:hover a {
+    color: #FFF;
+}
+
+#header .user-top .account a {
+    float: right;
+    padding: 10px 5px;
+    color: #ffffff82;
+}
+
+#header .user-top .account div {
+    float: right;
+}
+
+.account {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    /* gap: 10px; */
+}
+
+.account a {
+    color: #fff;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+}
+
+.account #account_details {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+#account_name {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 2px;
+}
+
+.account b.text-orange {
+    color: #ff9800;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+#header .user-top .account b {
+    display: block;
+    font-size: 25px;
+    color: #08b774;
+    font-family: Arial;
+}
+
+.user-img {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    max-width: 48px;
+    max-height: 48px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.user-top .user-img[data-v-f02899e6] {
+    flex: 0 0 auto;
+    padding: 0;
+    margin: 0;
+    max-width: 40px;
+    max-height: 40px;
+    text-align: center;
+    cursor: pointer;
+}
+
+.user-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#header .user-top .deposit {
+    flex: 2;
+    padding: 12px 10px;
+    min-width: 150px;
+    max-width: 150px;
+}
+
+#header .user-top .deposit .btn-deposit {
+    color: #08b774;
+    display: block;
+    border: 1px solid #08b774;
+    padding: 11px 15px;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 22px;
+    text-align: center;
+    border-radius: 3px;
+    background: transparent;
+    transition: all 0.2s;
+}
+
+#header .user-top .deposit .btn-deposit:hover {
+    color: #FFF;
+    background: #08b774;
+}
+
+/* App Container */
+#app-container {
+    overflow: auto;
+    height: calc(100% - 20px);
+    position: fixed;
+    width: 100%;
+    top: 74px;
+    background: #000000;
+}
+
+.menu-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+}
+
+#app-container #windows {
+    background-repeat: no-repeat;
+    background-position: 50% 50%;
+    background-size: 250px;
+    width: 100%;
+    height: calc(100% - 55px);
+    position: absolute;
+    right: 0;
+    background: #000000;
+}
+
+/* Layout 1 - колоночный формат (вертикальный) */
+#windows.layout_1 {
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+}
+
+#window,
+section[id^="window_"] {
+    height: 100%;
+    position: relative;
+    display: flex;
+}
+
+#window.active,
+section[id^="window_"].active {
+    display: flex !important;
+}
+
+#window .chart,
+section[id^="window_"] .chart {
+    background-repeat: no-repeat;
+    background-position: 50% 50%;
+    background-size: 250px;
+    flex: 9;
+    margin: 0 0 1px 0;
+    max-width: 100% !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    position: relative;
+    background: #000;
+}
+
+#window .chart iframe,
+section[id^="window_"] .chart iframe {
+    height: 100% !important;
+    width: 100%;
+    border: none;
+}
+
+/* Rightbar */
+#window #rightbar,
+section[id^="window_"] #rightbar {
+    position: relative;
+    flex: 1;
+    overflow: auto;
+    min-width: 240px;
+    background: #000000;
+}
+
+/* Десктоп: гарантируем, что rightbar справа */
+@media (min-width: 991px) {
+    #header .logo {
+        max-width: 90px;
+    }
+}
+
+.symbol-countdown {
+    padding: 12px 0 5px 0;
+    margin: 0 10px;
+    color: #FFF;
+    font-size: 14px;
+}
+
+.symbol-countdown .sc-title {
+    font-size: 15px;
+    color: #ffffff69;
+}
+
+.symbol-countdown .sc-bar {
+    background: #ffffff1c;
+    height: 4px;
+    border-radius: 5px;
+    margin-top: 8px;
+    overflow: hidden;
+}
+
+.symbol-countdown .sc-bar .sc-bar-fill {
+    height: 10px;
+    float: right;
+}
+
+#window #rightbar .rb-item,
+section[id^="window_"] #rightbar .rb-item {
+    margin: 10px;
+    padding: 0;
+    color: #FFF;
+    background: #ffffff14;
+    position: relative;
+}
+
+#window #rightbar .rb-item .rb-title,
+section[id^="window_"] #rightbar .rb-item .rb-title {
+    font-size: 12px;
+    color: #ffffffcc;
+    font-weight: bold;
+    padding: 10px 10px 2px 10px;
+}
+
+#window #rightbar .rb-item .rb-value,
+section[id^="window_"] #rightbar .rb-item .rb-value {
+    color: #ffffffcc;
+    font-size: 20px;
+    text-align: center;
+    padding: 10px;
+}
+
+#window #rightbar .rb-item .rb-value i,
+section[id^="window_"] #rightbar .rb-item .rb-value i {
+    margin-right: 5px;
+    position: absolute;
+    margin-top: 4px;
+    left: 10px;
+    color: #ffffff42;
+}
+
+#window #rightbar .rb-item .rb-value input,
+section[id^="window_"] #rightbar .rb-item .rb-value input {
+    max-width: 100%;
+    text-align: center;
+    background: transparent;
+    border: 0;
+    color: #ffffffcc;
+    font-size: 20px;
+}
+
+#window #rightbar .rb-item .rb-buttons,
+section[id^="window_"] #rightbar .rb-item .rb-buttons {
+    display: flex;
+}
+
+#window #rightbar .rb-item .rb-buttons button,
+section[id^="window_"] #rightbar .rb-item .rb-buttons button {
+    background: #0003;
+    border: 0;
+    color: #ffffffb3;
+    font-size: 30px;
+    flex: 1;
+    padding: 0 15px;
+    width: 49%;
+}
+
+#window #rightbar .rb-item .rb-buttons button:hover,
+section[id^="window_"] #rightbar .rb-item .rb-buttons button:hover {
+    background: #ffffff12;
+    cursor: pointer;
+}
+
+#window #rightbar .rb-profit,
+section[id^="window_"] #rightbar .rb-profit {
+    margin: 10px;
+    padding: 10px;
+    color: #FFF;
+    text-align: center;
+}
+
+#window #rightbar .rb-profit .rb-title,
+section[id^="window_"] #rightbar .rb-profit .rb-title {
+    font-size: 12px;
+}
+
+#window #rightbar .rb-profit .rb-percent,
+section[id^="window_"] #rightbar .rb-profit .rb-percent {
+    font-size: 25px;
+    padding: 0;
+    color: #08b774;
+    font-family: Arial;
+}
+
+#window #rightbar .rb-profit .rb-amount,
+section[id^="window_"] #rightbar .rb-profit .rb-amount {
+    font-weight: bold;
+    color: #ffffffbd;
+    font-family: Arial;
+}
+
+#window #rightbar .rb-trade-buttons,
+section[id^="window_"] #rightbar .rb-trade-buttons {
+    margin: 10px;
+    padding: 10px;
+}
+
+#window #rightbar .rb-trade-buttons button,
+section[id^="window_"] #rightbar .rb-trade-buttons button {
+    display: block;
+    width: 100%;
+    border: 0;
+    padding: 15px 10px;
+    font-size: 15px;
+    text-transform: uppercase;
+    font-weight: 500;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#window #rightbar .rb-trade-buttons button .zli,
+section[id^="window_"] #rightbar .rb-trade-buttons button .zli {
+    display: block;
+}
+
+#window #rightbar .rb-trade-buttons button .mobile-profit,
+section[id^="window_"] #rightbar .rb-trade-buttons button .mobile-profit {
+    display: none;
+    float: right;
+    color: #00000038;
+    font-weight: bold;
+}
+
+#window #rightbar .rb-trade-buttons .bg-buy,
+section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
+    margin-bottom: 5px;
+}
+
+.bg-buy {
+    background: #08b774;
+    color: #FFF;
+}
+
+.bg-buy:hover {
+    background: #089f65;
+}
+
+.bg-sell {
+    background: #f92757;
+    color: #FFF;
+}
+
+.bg-sell:hover {
+    background: #da1946;
+}
+
+.rb-server-time {
+    font-family: Arial;
+    color: #ffffff73;
+    font-size: 14px;
+    position: absolute;
+    width: 100%;
+    text-align: center;
+}
+
+.rb-server-time span {
+    color: #ffffffe3 !important;
+    font-family: Arial;
+}
+
+/* Modal */
+.modal,
+.traderoom-modal {
+    display: none;
+    position: fixed;
+    z-index: 10000 !important;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    overflow-y: auto;
+}
+
+.modal[style*="display: block"],
+.modal.show,
+.traderoom-modal[style*="display: block"],
+.traderoom-modal.show {
+    display: block !important;
+}
+
+.modal-content,
+.traderoom-modal .trm-content {
+    background-color: #000000; /* Черный фон */
+    margin: 10% auto;
+    padding: 30px;
+    border: none;
+    width: 90%;
+    max-width: 500px;
+    border-radius: 0;
+    position: relative;
+    z-index: 10001 !important;
+}
+
+.traderoom-modal {
+    z-index: 10000 !important;
+}
+
+.traderoom-modal .trm-content {
+    z-index: 10001 !important;
+}
+
+.close {
+    color: rgba(255, 255, 255, 0.7);
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    position: absolute;
+    right: 20px;
+    top: 20px;
+}
+
+.close:hover {
+    color: #fff;
+}
+
+.modal-content h2 {
+    margin-bottom: 20px;
+    color: #fff;
+}
+
+.search-container {
+    margin-bottom: 15px;
+}
+
+.pair-search {
+    width: 100%;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: #fff;
+    font-size: 14px;
+    outline: none;
+}
+
+.pair-search:focus {
+    border-color: #22c55e;
+}
+
+.pair-search::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.available-pairs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 5px;
+}
+
+.pair-option {
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pair-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.pair-option.selected {
+    background: #22c55e;
+    color: #000;
+    font-weight: 600;
+}
+
+.pair-option .pair-name {
+    font-weight: 500;
+}
+
+.pair-option .pair-symbol {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    opacity: 0.7;
+}
+
+.pair-option.selected .pair-symbol {
+    color: rgba(0, 0, 0, 0.7);
+    opacity: 0.8;
+}
+
+/* Utility classes */
+.text-buy {
+    color: #08b774 !important;
+    border-color: #08b774 !important;
+}
+
+.text-sell {
+    color: #f92757 !important;
+    border-color: #f92757 !important;
+}
+
+.text-gray {
+    color: #ffffff82 !important;
+    border-color: #ffffff82 !important;
+}
+
+.text-orange {
+    color: #f78849 !important;
+    border-color: #f78849 !important;
+}
+
+.countup-wrap,
+.countup-wrap * {
+    font-family: Arial !important;
+}
+
+.percent-profit-side {
+    font-size: 20px;
+    vertical-align: middle;
+    margin-left: 5px;
+    font-family: Arial;
+}
+
+/* Mobile styles */
+@media (max-width: 991px) {
+    .desktop-only {
+        display: none !important;
+    }
+    
+    #header #tabs .icon-item.btn-deposit-mobile {
+        display: inline-block !important;
+    }
+
+    #header .logo {
+        display: flex;
+        display: -webkit-flex;
+    }
+
+    #header .logo img {
+        padding: 2px 0 !important;
+    }
+
+    .user-top {
+        display: none;
+    }
+
+    #app-container #windows {
+        float: none !important;
+        width: 100%;
+    }
+
+    #app-container #window.active,
+    #app-container section[id^="window_"].active {
+        display: block !important;
+        width: 100%;
+        height: 100%;
+    }
+
+    #app-container #window .chart,
+    #app-container section[id^="window_"] .chart {
+        height: calc(100% - 185px);
+    }
+}
+
+@media (max-width: 500px) {
+    #window #rightbar,
+    section[id^="window_"] #rightbar {
+        position: fixed !important;
+        width: 100%;
+        bottom: 27px;
+        padding: 3px 5px;
+        background: #000000;
+        z-index: 1000;
+    }
+
+    #window #rightbar .rb-profit,
+    section[id^="window_"] #rightbar .rb-profit {
+        display: none;
+    }
+
+    #window #rightbar .rb-item,
+    section[id^="window_"] #rightbar .rb-item {
+        width: calc(50% - 3px);
+        display: inline-block;
+        position: relative;
+        margin: 3px 0 5px 0;
+    }
+
+    #window #rightbar .rb-item .rb-title,
+    section[id^="window_"] #rightbar .rb-item .rb-title {
+        padding: 7px 10px;
+    }
+
+    #window #rightbar .rb-item .rb-value,
+    section[id^="window_"] #rightbar .rb-item .rb-value {
+        padding: 4px 0;
+        position: absolute;
+        right: 5px;
+        top: 0;
+        text-align: right;
+    }
+
+    .desktop-only {
+        display: none !important;
+    }
+
+    #window #rightbar .rb-item .rb-value input,
+    section[id^="window_"] #rightbar .rb-item .rb-value input {
+        text-align: right;
+        max-width: 100%;
+    }
+
+    #rightbar .rb-item .rb-buttons,
+    section[id^="window_"] #rightbar .rb-item .rb-buttons {
+        flex-direction: row !important;
+        position: initial !important;
+        height: auto !important;
+    }
+
+    #window #rightbar .rb-item .rb-buttons button,
+    section[id^="window_"] #rightbar .rb-item .rb-buttons button {
+        width: initial !important;
+    }
+
+    #window #rightbar .rb-trade-buttons,
+    section[id^="window_"] #rightbar .rb-trade-buttons {
+        margin: 0;
+        padding: 0;
+    }
+
+    #window #rightbar .rb-trade-buttons button,
+    section[id^="window_"] #rightbar .rb-trade-buttons button {
+        display: inline-block;
+        width: calc(50% - 3px);
+        text-align: left;
+    }
+
+    #window #rightbar .rb-trade-buttons button .mobile-profit,
+    section[id^="window_"] #rightbar .rb-trade-buttons button .mobile-profit {
+        display: block;
+    }
+
+    #window #rightbar .rb-trade-buttons .zli,
+    section[id^="window_"] #rightbar .rb-trade-buttons .zli {
+        display: none !important;
+    }
+
+    #header #tabs .item:not(.active) {
+        width: 35px !important;
+        min-width: 35px !important;
+        margin-top: 1px;
+        margin-bottom: -15px;
+        padding: 12px 10px;
+    }
+
+    #header #tabs .item:not(.active) .title,
+    #header #tabs .item:not(.active) .description {
+        display: none;
+    }
+}
+
+/* Traderoom Modal Styles */
+.traderoom-modal {
+    background: #000000;
+    display: none;
+    position: fixed;
+    z-index: 999 !important;
+    height: calc(100% - 74px);
+    width: 100%;
+    color: #FFF;
+    top: 74px;
+    left: 0;
+    overflow-y: auto;
+}
+
+.traderoom-modal .trm-content {
+    width: 100%;
+    max-width: 800px;
+    margin: 20px auto;
+    overflow: auto;
+    padding: 0 15px;
+    background: #000000;
+    border: none;
+    box-shadow: none;
+}
+
+.traderoom-modal .trm-content.expanded {
+    max-width: 1200px !important;
+}
+
+.traderoom-modal .trm-content .cancel {
+    background: transparent;
+    color: #ffffffb0;
+    border: 2px solid #ffffffb0;
+    border-radius: 500px;
+    padding: 5px;
+    float: right;
+    cursor: pointer;
+    border: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.traderoom-modal .trm-content .cancel:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.traderoom-modal .h-title {
+    font-weight: bold;
+    font-size: 21px;
+    padding: 6px 0;
+    color: #FFF;
+}
+
+.traderoom-modal .row {
+    display: flex;
+    flex-direction: row;
+    margin: 0;
+}
+
+.traderoom-modal .row .col-12 {
+    width: 100%;
+}
+
+.traderoom-modal .row .col-lg-3 {
+    flex: 0 0 25%;
+    max-width: 25%;
+    padding-right: 15px;
+}
+
+.traderoom-modal .row .col-lg-9 {
+    flex: 0 0 75%;
+    max-width: 75%;
+    padding-left: 15px;
+}
+
+@media (max-width: 991px) {
+    .traderoom-modal .row {
+        flex-direction: column;
+    }
+    
+    .traderoom-modal .row .col-lg-3,
+    .traderoom-modal .row .col-lg-9 {
+        flex: 0 0 100%;
+        max-width: 100%;
+        padding-left: 0;
+        padding-right: 0;
+    }
+}
+
+.traderoom-modal .trm-menu {
+    padding: 0;
+    margin: 0 0 10px 0;
+    list-style: none;
+}
+
+/* Desktop menu - видно только на десктопе */
+.traderoom-modal .trm-menu.d-none.d-lg-block {
+    display: none !important;
+}
+
+@media (min-width: 992px) {
+    .traderoom-modal .trm-menu.d-none.d-lg-block {
+        display: block !important;
+    }
+}
+
+/* Mobile menu - видно только на мобильном */
+.traderoom-modal .trm-menu.mobile-menu.d-block.d-lg-none {
+    display: block !important;
+}
+
+@media (min-width: 992px) {
+    .traderoom-modal .trm-menu.mobile-menu.d-block.d-lg-none {
+        display: none !important;
+    }
+}
+
+.traderoom-modal .trm-menu li {
+    list-style: none;
+    display: block;
+}
+
+.traderoom-modal .trm-menu li a {
+    transition: all 0.3s ease;
+    color: #ffffffc9 !important;
+    display: block;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(0, 0, 0, .03);
+    text-decoration: none;
+}
+
+.traderoom-modal .trm-menu li a:hover,
+.traderoom-modal .trm-menu li a.active {
+    background: #ffffff29;
+    padding-left: 10px;
+    text-decoration: none;
+    color: #FFF !important;
+}
+
+.traderoom-modal .trm-menu li a .zli {
+    font-size: 16px;
+    vertical-align: sub;
+    margin-right: 5px;
+}
+
+.trm-menu.mobile-menu {
+    white-space: nowrap;
+    overflow: auto;
+}
+
+.trm-menu.mobile-menu li {
+    display: inline-block !important;
+}
+
+.trm-menu.mobile-menu li a {
+    text-align: center;
+    padding: 14px 20px !important;
+    font-size: 13px;
+}
+
+.trm-menu.mobile-menu li a span {
+    display: block;
+    font-size: 20px;
+    margin-bottom: 5px;
+}
+
+.trm-section-content {
+    overflow: auto;
+}
+
+.trm-section-content .trm-inputs,
+.trm-section-content .trm-inputs:focus,
+.trm-section-content .trm-inputs:active {
+    background: #ffffff14;
+    border: 0;
+    color: #FFF;
+    width: 100%;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.trm-section-content .trm-inputs::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.table.slist {
+    width: 100%;
+    border-collapse: collapse;
+    color: #FFF;
+}
+
+.table.slist thead th {
+    color: #ffffff7a;
+    font-weight: 500;
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.table thead th[data-v-a849e800] {
+    border-bottom: 0 !important;
+    color: #ffffffd6;
+    font-weight: 400;
+    font-size: 14px;
+}
+
+.table.slist tbody tr {
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.table.slist tbody tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.table.slist tbody td {
+    padding: 12px 10px;
+    vertical-align: middle;
+}
+
+.symbol-detail {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.symbol-img {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+}
+
+.symbol-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.symbol-data {
+    flex: 1;
+    color: #FFF;
+    font-weight: 500;
+}
+
+.h-description {
+    font-size: 12px;
+    color: #ffffff7a;
+    font-weight: 400 !important;
+    margin-top: 2px;
+}
+
+.symbol-payout {
+    font-family: Arial;
+    font-weight: 500;
+}
+
+.symbol-payout.text-buy {
+    color: #08b774;
+}
+
+.s-icon {
+    color: #ff9800;
+    font-size: 16px;
+    margin: 0 2px;
+}
+
+.mobile-hide {
+    display: table-cell;
+}
+
+@media (max-width: 768px) {
+    .mobile-hide {
+        display: none !important;
+    }
+}

@@ -1,0 +1,129 @@
+/* Кастомные стили для TradingView */
+
+#tv_chart_container {
+    width: 100%;
+    height: 100%;
+    flex: 1;
+    min-height: 0;
+}
+
+/* Скрываем некоторые элементы TradingView, которые конфликтуют с нашим UI */
+.tv-header {
+    display: none !important;
+}
+
+/* Убираем правую панель виджетов */
+.tv-right-widgets-panel,
+.tv-right-toolbar,
+[class*="right-panel"],
+[class*="right-toolbar"] {
+    display: none !important;
+}
+
+/* Убираем серые разделители между UI элементами */
+.tv-chart-container [class*="separator"],
+.tv-chart-container [class*="divider"],
+.tv-chart-container hr,
+.tv-chart-container [class*="border"],
+.tv-chart-container [class*="rounded"],
+.tv-chart-container [class*="rounded-border"] {
+    display: none !important;
+    border: none !important;
+    background: transparent !important;
+}
+
+/* Убираем закругленные разделители */
+.tv-chart-container [class*="rounded"] {
+    border-radius: 0 !important;
+}
+
+/* Убираем разделители в header */
+.tv-header [class*="separator"],
+.tv-header [class*="divider"] {
+    display: none !important;
+}
+
+/* Закрашиваем все боковые панели, хедеры и элементы графика в черный цвет */
+#tv_chart_container *,
+#tv_chart_container [class*="header"],
+#tv_chart_container [class*="toolbar"],
+#tv_chart_container [class*="panel"],
+#tv_chart-container [class*="widget"],
+#tv_chart_container [class*="bar"],
+#tv_chart_container [class*="menu"],
+#tv_chart_container [class*="button"],
+#tv_chart_container [class*="control"],
+#tv_chart_container [class*="legend"],
+#tv_chart_container [class*="scale"],
+#tv_chart_container [class*="pane"],
+#tv_chart_container [class*="container"] {
+    background-color: #000000 !important;
+    background: #000000 !important;
+}
+
+/* Закрашиваем хедер в черный */
+#tv_chart_container [class*="header"] {
+    background-color: #000000 !important;
+    background: #000000 !important;
+    border-color: #000000 !important;
+}
+
+/* Закрашиваем боковые панели в черный */
+#tv_chart_container [class*="toolbar"],
+#tv_chart_container [class*="panel"] {
+    background-color: #000000 !important;
+    background: #000000 !important;
+    border-color: #000000 !important;
+}
+
+/* Закрашиваем элементы управления в черный */
+#tv_chart_container [class*="button"],
+#tv_chart_container [class*="control"],
+#tv_chart_container [class*="menu"] {
+    background-color: #000000 !important;
+    background: #000000 !important;
+}
+
+/* Закрашиваем легенду в черный */
+#tv_chart_container [class*="legend"] {
+    background-color: #000000 !important;
+    background: #000000 !important;
+}
+
+/* Закрашиваем шкалы в черный */
+#tv_chart_container [class*="scale"] {
+    background-color: #000000 !important;
+    background: #000000 !important;
+}
+
+/* Закрашиваем верхнюю панель (layout__area--top) в черный */
+.layout__area--top,
+[class*="layout__area--top"] {
+    background-color: #000000 !important;
+    background: #000000 !important;
+}
+
+/* Закрашиваем toolbar в черный */
+.toolbar-qqNP9X6e,
+[class*="toolbar"] {
+    background-color: #000000 !important;
+    background: #000000 !important;
+}
+
+/* Закрашиваем все элементы внутри верхней панели в черный */
+.layout__area--top *,
+[class*="layout__area--top"] * {
+    background-color: #000000 !important;
+    background: #000000 !important;
+}
+
+/* Закрашиваем кнопки и группы в верхней панели */
+.layout__area--top button,
+.layout__area--top [class*="button"],
+.layout__area--top [class*="group"],
+.layout__area--top [class*="wrap"],
+.layout__area--top [class*="inner"] {
+    background-color: #000000 !important;
+    background: #000000 !important;
+}
+
