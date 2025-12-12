@@ -28,6 +28,14 @@ def admin():
     except Exception as e:
         return f"Error loading admin.html: {str(e)}", 404
 
+@app.route('/test')
+def test():
+    """Тестовая страница для проверки прямоугольников"""
+    try:
+        return send_from_directory(FRONTEND_DIR, 'test.html')
+    except Exception as e:
+        return f"Error loading test.html: {str(e)}", 404
+
 # Статические файлы (CSS, JS, изображения)
 @app.route('/css/<path:filename>')
 def serve_css(filename):

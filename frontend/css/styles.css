@@ -462,6 +462,11 @@ section[id^="window_"] #rightbar {
     font-size: 14px;
 }
 
+.btn-deposit-mobile[data-v-f02899e6] {
+    border-color: #08b774!important;
+    color: #08b774!important;
+}
+
 .symbol-countdown .sc-title {
     font-size: 15px;
     color: #ffffff69;

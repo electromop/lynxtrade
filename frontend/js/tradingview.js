@@ -212,6 +212,11 @@ function initTradingView(pairId = 1, containerElement = null) {
         console.log(`🔍 [onChartReady] brokerInstance:`, brokerInstance);
         console.log(`🔍 [onChartReady] widgetData.broker:`, widgetData.broker);
         
+        // ТЕСТ: Создаем тестовый прямоугольник при загрузке графика
+        setTimeout(() => {
+            createTestRectangle(tvWidget, pairId);
+        }, 2000); // Ждем 2 секунды после загрузки
+        
         // Пытаемся получить broker из виджета после onChartReady
         try {
             const chart = tvWidget.chart();
@@ -552,15 +557,97 @@ function addOrderMarks(pairId = null, orders = []) {
     }
 }
 
-// Функция для обновления текста на линии с обратным отсчетом
+// ТЕСТОВАЯ функция для создания прямоугольника при загрузке графика
+function createTestRectangle(tvWidget, pairId) {
+    console.log('🧪 [createTestRectangle] Creating test rectangle...');
+    
+    try {
+        const activeChart = tvWidget.activeChart();
+        if (!activeChart) {
+            console.warn('⚠️ [createTestRectangle] Active chart not available');
+            return;
+        }
+        
+        // Получаем текущее время и цену
+        const now = Math.floor(Date.now() / 1000);
+        const testPrice = 175.0; // Тестовая цена для AAPL
+        
+        // Создаем большой видимый прямоугольник
+        const timeRange = 60 * 30; // 30 минут
+        const priceRange = 10; // 10 единиц по цене
+        
+        const leftTime = now - timeRange / 2;
+        const rightTime = now + timeRange / 2;
+        const topPrice = testPrice + priceRange;
+        const bottomPrice = testPrice - priceRange;
+        
+        console.log('🧪 [createTestRectangle] Test rectangle coordinates:');
+        console.log(`  leftTime: ${leftTime} (${new Date(leftTime * 1000).toISOString()})`);
+        console.log(`  rightTime: ${rightTime} (${new Date(rightTime * 1000).toISOString()})`);
+        console.log(`  topPrice: ${topPrice}, bottomPrice: ${bottomPrice}`);
+        console.log(`  center price: ${testPrice}`);
+        
+        // Создаем прямоугольник
+        activeChart.createMultipointShape(
+            [
+                { time: leftTime, price: topPrice },   // Левый верхний угол
+                { time: rightTime, price: bottomPrice } // Правый нижний угол
+            ],
+            {
+                shape: 'rectangle',
+                text: 'TEST 175.00', // Тестовый текст
+                overrides: {
+                    linecolor: '#22c55e', // Зеленый
+                    linewidth: 3,
+                    fillcolor: '#22c55e',
+                    transparency: 30, // Немного прозрачный для видимости
+                    showLabel: true,
+                    textcolor: '#ffffff',
+                    fontsize: 16,
+                },
+                lock: false,
+            }
+        ).then((rectShapeId) => {
+            console.log(`✅ [createTestRectangle] Test rectangle created successfully! ID: ${rectShapeId}`);
+            
+            // Проверяем через секунду
+            setTimeout(() => {
+                try {
+                    const rectShape = activeChart.getShapeById(rectShapeId);
+                    if (rectShape) {
+                        const props = rectShape.getProperties();
+                        console.log('🔍 [createTestRectangle] Rectangle properties:', props);
+                        
+                        // Пробуем получить точки
+                        if (typeof rectShape.getPoints === 'function') {
+                            const points = rectShape.getPoints();
+                            console.log('🔍 [createTestRectangle] Rectangle points:', points);
+                        }
+                    } else {
+                        console.warn('⚠️ [createTestRectangle] Rectangle not found after creation');
+                    }
+                } catch (e) {
+                    console.warn('⚠️ [createTestRectangle] Error checking rectangle:', e);
+                }
+            }, 1000);
+        }).catch((error) => {
+            console.error('❌ [createTestRectangle] Error creating test rectangle:', error);
+            console.error('❌ [createTestRectangle] Error details:', error.message, error.stack);
+        });
+    } catch (error) {
+        console.error('❌ [createTestRectangle] Exception:', error);
+    }
+}
+
+// Функция для обновления прямоугольника (изменение прозрачности при истечении времени)
 function updateOrderLineCountdown(pairId, orderId, endTime, side, price) {
     const widgetData = tvWidgets.get(pairId);
     if (!widgetData || !widgetData.widget || !widgetData.orderLines) {
         return;
     }
     
-    const shapeId = widgetData.orderLines.get(orderId);
-    if (!shapeId) {
+    const shapeIds = widgetData.orderLines.get(orderId);
+    if (!shapeIds) {
         return;
     }
     
@@ -572,7 +659,9 @@ function updateOrderLineCountdown(pairId, orderId, endTime, side, price) {
                 return;
             }
             
-            const shape = activeChart.getShapeById(shapeId);
+            // Получаем ID прямоугольника
+            const rectId = typeof shapeIds === 'object' && shapeIds.rectId ? shapeIds.rectId : shapeIds;
+            const shape = activeChart.getShapeById(rectId);
             if (!shape) {
                 return;
             }
@@ -582,43 +671,24 @@ function updateOrderLineCountdown(pairId, orderId, endTime, side, price) {
             const end = typeof endTime === 'string' ? new Date(endTime).getTime() : endTime;
             const remaining = Math.max(0, Math.floor((end - now) / 1000)); // секунды
             
+            // Для прямоугольника можно изменить прозрачность при истечении времени
             if (remaining <= 0) {
-                // Время истекло
-                const text = `${side} @ ${price.toFixed(2)} (EXPIRED)`;
-                if (shape.setText && typeof shape.setText === 'function') {
-                    shape.setText(text);
-                } else if (shape.setProperties && typeof shape.setProperties === 'function') {
-                    shape.setProperties({ text: text });
+                // Время истекло - делаем прямоугольник полупрозрачным
+                try {
+                    const properties = shape.getProperties();
+                    if (properties) {
+                        properties.transparency = 50; // 50% прозрачности
+                        shape.setProperties(properties);
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Could not update rectangle properties:', e);
                 }
                 return;
             }
             
-            // Форматируем время: MM:SS
-            const minutes = Math.floor(remaining / 60);
-            const seconds = remaining % 60;
-            const timeStr = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-            
-            // Обновляем текст на линии
-            const text = `${side} @ ${price.toFixed(2)} (${timeStr})`;
-            
-            if (shape.setText && typeof shape.setText === 'function') {
-                shape.setText(text);
-            } else if (shape.setProperties && typeof shape.setProperties === 'function') {
-                shape.setProperties({ text: text });
-            } else {
-                // Альтернативный способ через getProperties и setProperties
-                try {
-                    const properties = shape.getProperties();
-                    if (properties) {
-                        properties.text = text;
-                        shape.setProperties(properties);
-                    }
-                } catch (e) {
-                    console.warn('⚠️ Could not update line text:', e);
-                }
-            }
+            // Прямоугольник остается полностью непрозрачным пока время не истекло
         } catch (error) {
-            console.error('❌ Error updating line countdown:', error);
+            console.error('❌ Error updating rectangle countdown:', error);
         }
     });
 }
@@ -641,6 +711,7 @@ function drawOrderLine(pairId = null, price, orderId, side = 'BUY', orderTime = 
     }
     
     // Используем переданное время или текущее время
+    // TradingView ожидает время в секундах (Unix timestamp)
     const lineTime = orderTime || Math.floor(Date.now() / 1000);
     
     console.log(`📏 [drawOrderLine] Creating line for order ${orderId}: price=${price}, time=${lineTime}, side=${side}`);
@@ -656,92 +727,205 @@ function drawOrderLine(pairId = null, price, orderId, side = 'BUY', orderTime = 
                     return;
                 }
                 
-                // Цвет линии: зеленый для BUY, красный для SELL
+                // Цвет линии и прямоугольника: зеленый для BUY, красный для SELL
                 const lineColor = side === 'BUY' ? '#22c55e' : '#ef4444';
+                const rectColor = side === 'BUY' ? '#22c55e' : '#ef4444';
                 
-                console.log(`📏 [drawOrderLine] Calling createShape with price=${price}, time=${lineTime}`);
+                console.log(`📏 [drawOrderLine] Creating rectangle only (without line) for order ${orderId} at price=${price}, time=${lineTime}`);
                 
-                // Создаем горизонтальную линию через createShape
-                // Согласно документации: createShape(point, CreateShapeOptions)
-                // point: PricedPoint { time, price }
-                // CreateShapeOptions: { shape, overrides, extend, ... }
-                // ВАЖНО: для горизонтальной линии extend.left и extend.right определяют, как далеко линия растягивается
+                // ВРЕМЕННО: создаем только прямоугольник без линии для тестирования
+                // Сначала создаем горизонтальную линию
+                /*
                 activeChart.createShape(
-                    { time: lineTime, price: price }, // PricedPoint - используем точную цену и время
+                    { time: Math.floor(lineTime), price: price },
                     {
-                        shape: 'horizontal_line', // Тип рисунка - горизонтальная линия
+                        shape: 'horizontal_line',
                         extend: {
-                            left: true,  // Растягиваем линию влево
-                            right: true, // Растягиваем линию вправо
+                            left: true,
+                            right: true,
                         },
                         overrides: {
                             linecolor: lineColor,
                             linewidth: 2,
                             linestyle: 0, // Solid line
-                            showLabel: true,
-                            text: `${side} @ ${price.toFixed(2)}`,
-                            // ВАЖНО: цена задается в точке { time, price }, а не в overrides
+                            showLabel: false, // Убираем текст с линии
                         },
-                        lock: false, // Разрешаем перемещение и удаление в UI
+                        lock: false,
                     }
-                ).then((shapeId) => {
-                    // Сохраняем ID рисунка для возможного удаления позже
-                    if (!widgetData.orderLines) {
-                        widgetData.orderLines = new Map();
-                    }
-                    widgetData.orderLines.set(orderId, shapeId);
-                    console.log(`✅ [drawOrderLine] Horizontal line created for order ${orderId} at price ${price}, time ${lineTime}, shapeId: ${shapeId}`);
+                ).then((lineShapeId) => {
+                    console.log(`✅ [drawOrderLine] Horizontal line created, shapeId: ${lineShapeId}`);
+                    */
                     
-                    // Если передан endTime, запускаем обратный отсчет
-                    if (endTime) {
-                        // Обновляем сразу
-                        updateOrderLineCountdown(targetPairId, orderId, endTime, side, price);
-                        
-                        // Сохраняем интервал для обновления каждую секунду
-                        if (!widgetData.orderLineIntervals) {
-                            widgetData.orderLineIntervals = new Map();
+                    // Теперь создаем прямоугольник
+                    // Вычисляем размер прямоугольника
+                    let priceOffset;
+                    if (price > 100) {
+                        priceOffset = price * 0.05; // 5% от цены для больших цен
+                    } else if (price > 10) {
+                        priceOffset = price * 0.08; // 8% от цены для средних цен
+                    } else {
+                        priceOffset = price * 0.15; // 15% от цены для малых цен
+                    }
+                    // Минимальный размер для видимости
+                    if (priceOffset < price * 0.02) {
+                        priceOffset = price * 0.02;
+                    }
+                    
+                    const topPrice = price + priceOffset;
+                    const bottomPrice = price - priceOffset;
+                    
+                    // Получаем видимый диапазон графика, чтобы убедиться, что прямоугольник будет виден
+                    let visibleRange = null;
+                    try {
+                        const chart = activeChart;
+                        if (chart && typeof chart.getVisibleRange === 'function') {
+                            visibleRange = chart.getVisibleRange();
+                            console.log(`📏 [drawOrderLine] Visible time range:`, visibleRange);
                         }
+                    } catch (e) {
+                        console.warn('⚠️ [drawOrderLine] Could not get visible range:', e);
+                    }
+                    
+                    // Временной диапазон для прямоугольника - делаем его больше для видимости
+                    const timeRange = 60 * 10; // 10 минут в секундах (увеличили для видимости)
+                    const leftTime = Math.floor(lineTime - timeRange / 2);
+                    const rightTime = Math.floor(lineTime + timeRange / 2);
+                    
+                    // Увеличиваем размер по цене для лучшей видимости
+                    const priceOffsetMultiplier = 2; // Увеличиваем в 2 раза
+                    const finalTopPrice = price + (priceOffset * priceOffsetMultiplier);
+                    const finalBottomPrice = price - (priceOffset * priceOffsetMultiplier);
+                    
+                    console.log(`📏 [drawOrderLine] Creating rectangle via createMultipointShape with 2 points`);
+                    console.log(`📏 [drawOrderLine] Rectangle coordinates: leftTime=${leftTime}, rightTime=${rightTime}, topPrice=${finalTopPrice}, bottomPrice=${finalBottomPrice}`);
+                    console.log(`📏 [drawOrderLine] Rectangle price offset: ${priceOffset * priceOffsetMultiplier} (${(priceOffset * priceOffsetMultiplier / price * 100).toFixed(2)}%)`);
+                    console.log(`📏 [drawOrderLine] Line time: ${lineTime}, Current time: ${Math.floor(Date.now() / 1000)}`);
+                    
+                    // Создаем прямоугольник через createMultipointShape
+                    // Прямоугольник ТРЕБУЕТ ровно 2 точки: левый верхний и правый нижний углы
+                    const rectanglePoints = [
+                        { time: leftTime, price: finalTopPrice },   // Левый верхний угол
+                        { time: rightTime, price: finalBottomPrice } // Правый нижний угол
+                    ];
+                    
+                    console.log(`📏 [drawOrderLine] Rectangle points array:`, rectanglePoints);
+                    console.log(`📏 [drawOrderLine] Points count: ${rectanglePoints.length} (should be 2)`);
+                    console.log(`📏 [drawOrderLine] Rectangle will be ${timeRange} seconds wide (${timeRange / 60} minutes)`);
+                    
+                    activeChart.createMultipointShape(
+                        rectanglePoints,
+                        {
+                            shape: 'rectangle',
+                            text: price.toFixed(2), // Цена в прямоугольнике
+                            overrides: {
+                                linecolor: rectColor,
+                                linewidth: 3, // Увеличили толщину обводки
+                                fillcolor: rectColor,
+                                transparency: 0, // Полностью непрозрачный
+                                showLabel: true,
+                                textcolor: '#ffffff',
+                                fontsize: 16, // Увеличили размер шрифта
+                                // Добавляем более яркие цвета для видимости
+                                borderColor: rectColor,
+                                backgroundColor: rectColor,
+                            },
+                            lock: false,
+                        }
+                    ).then((rectShapeId) => {
+                        console.log(`✅ [drawOrderLine] Rectangle created via createMultipointShape, rectShapeId: ${rectShapeId}`);
+                        console.log(`✅ [drawOrderLine] Rectangle created successfully, rectShapeId: ${rectShapeId}`);
                         
-                        const intervalId = setInterval(() => {
-                            updateOrderLineCountdown(targetPairId, orderId, endTime, side, price);
-                        }, 1000); // Обновляем каждую секунду
-                        
-                        widgetData.orderLineIntervals.set(orderId, intervalId);
-                        
-                        // Останавливаем интервал когда время истечет
-                        const end = typeof endTime === 'string' ? new Date(endTime).getTime() : endTime;
-                        const remaining = Math.max(0, end - Date.now());
+                        // Проверяем, что прямоугольник действительно создан и виден
                         setTimeout(() => {
-                            if (widgetData.orderLineIntervals) {
-                                const interval = widgetData.orderLineIntervals.get(orderId);
-                                if (interval) {
-                                    clearInterval(interval);
-                                    widgetData.orderLineIntervals.delete(orderId);
+                            try {
+                                const rectShape = activeChart.getShapeById(rectShapeId);
+                                if (rectShape) {
+                                    const props = rectShape.getProperties();
+                                    console.log(`🔍 [drawOrderLine] Rectangle properties:`, props);
+                                    console.log(`🔍 [drawOrderLine] Rectangle exists and is accessible`);
+                                    
+                                    // Пробуем получить точки прямоугольника для проверки координат
+                                    if (typeof rectShape.getPoints === 'function') {
+                                        const points = rectShape.getPoints();
+                                        console.log(`🔍 [drawOrderLine] Rectangle points:`, points);
+                                    }
+                                } else {
+                                    console.warn(`⚠️ [drawOrderLine] Rectangle with ID ${rectShapeId} not found after creation`);
+                                    console.warn(`⚠️ [drawOrderLine] This might mean the rectangle was created but is not visible`);
                                 }
+                            } catch (e) {
+                                console.warn('⚠️ [drawOrderLine] Could not verify rectangle:', e);
                             }
-                        }, remaining);
-                    }
-                    
-                    // Проверяем, какая цена реально установлена на линии
-                    // Получаем свойства созданной линии для проверки
-                    setTimeout(() => {
-                        try {
-                            const shape = activeChart.getShapeById(shapeId);
-                            if (shape && typeof shape.getProperties === 'function') {
-                                const properties = shape.getProperties();
-                                console.log(`🔍 [drawOrderLine] Line properties for order ${orderId}:`, properties);
-                                if (properties && properties.price) {
-                                    console.log(`🔍 [drawOrderLine] Actual line price: ${properties.price}, expected: ${price}`);
-                                }
-                            }
-                        } catch (e) {
-                            console.warn('⚠️ [drawOrderLine] Could not get line properties:', e);
+                        }, 1000); // Увеличили задержку для проверки
+                        console.log(`✅ [drawOrderLine] Rectangle created for order ${orderId}, rectShapeId: ${rectShapeId}`);
+                        console.log(`✅ [drawOrderLine] Rectangle created at price ${price}, time ${lineTime}`);
+                        console.log(`✅ [drawOrderLine] Rectangle color: ${rectColor} (${side}), price text: ${price.toFixed(2)}`);
+                        
+                        // ВРЕМЕННО: сохраняем только прямоугольник (без линии)
+                        if (!widgetData.orderLines) {
+                            widgetData.orderLines = new Map();
                         }
-                    }, 500);
-                }).catch((error) => {
-                    console.error('❌ [drawOrderLine] Error creating shape:', error);
-                    console.error('❌ [drawOrderLine] Error details - price:', price, 'time:', lineTime, 'price type:', typeof price);
-                });
+                        widgetData.orderLines.set(orderId, {
+                            // lineId: lineShapeId, // Временно убрали
+                            rectId: rectShapeId
+                        });
+                        
+                        // ВРЕМЕННО: убрали группировку, так как создаем только прямоугольник
+                        /*
+                        // Пробуем объединить линию и прямоугольник в группу
+                        try {
+                            const groupController = activeChart.shapesGroupController();
+                            if (groupController) {
+                                const lineShape = activeChart.getShapeById(lineShapeId);
+                                const rectShape = activeChart.getShapeById(rectShapeId);
+                                
+                                if (lineShape && rectShape) {
+                                    console.log(`✅ [drawOrderLine] Both shapes exist, attempting to group them`);
+                                } else {
+                                    console.warn(`⚠️ [drawOrderLine] Could not get shapes for grouping. Line: ${!!lineShape}, Rect: ${!!rectShape}`);
+                                }
+                            } else {
+                                console.warn('⚠️ [drawOrderLine] shapesGroupController not available');
+                            }
+                        } catch (groupErr) {
+                            console.warn('⚠️ [drawOrderLine] Error creating group:', groupErr);
+                        }
+                        */
+                        
+                        // Если передан endTime, можно обновлять прозрачность прямоугольника
+                        if (endTime) {
+                            // Сохраняем интервал для обновления каждую секунду
+                            if (!widgetData.orderLineIntervals) {
+                                widgetData.orderLineIntervals = new Map();
+                            }
+                            
+                            const intervalId = setInterval(() => {
+                                updateOrderLineCountdown(targetPairId, orderId, endTime, side, price);
+                            }, 1000); // Обновляем каждую секунду
+                            
+                            widgetData.orderLineIntervals.set(orderId, intervalId);
+                            
+                            // Останавливаем интервал когда время истечет
+                            const end = typeof endTime === 'string' ? new Date(endTime).getTime() : endTime;
+                            const remaining = Math.max(0, end - Date.now());
+                            setTimeout(() => {
+                                if (widgetData.orderLineIntervals) {
+                                    const interval = widgetData.orderLineIntervals.get(orderId);
+                                    if (interval) {
+                                        clearInterval(interval);
+                                        widgetData.orderLineIntervals.delete(orderId);
+                                    }
+                                }
+                            }, remaining);
+                        }
+                    }).catch((rectError) => {
+                        console.error('❌ [drawOrderLine] Error creating rectangle:', rectError);
+                        console.error('❌ [drawOrderLine] Error details:', rectError.message, rectError.stack);
+                    });
+                // ВРЕМЕННО: убрали catch для линии, так как не создаем линию
+                // }).catch((lineError) => {
+                //     console.error('❌ [drawOrderLine] Error creating horizontal line:', lineError);
+                // });
                 
             } catch (error) {
                 console.error('❌ Error drawing order line:', error);
@@ -762,8 +946,8 @@ function removeOrderLine(pairId = null, orderId) {
         return;
     }
     
-    const shapeId = widgetData.orderLines.get(orderId);
-    if (!shapeId) {
+    const shapeIds = widgetData.orderLines.get(orderId);
+    if (!shapeIds) {
         return;
     }
     
@@ -787,13 +971,26 @@ function removeOrderLine(pairId = null, orderId) {
                     return;
                 }
                 
-                // Удаляем рисунок через removeEntity согласно документации
-                activeChart.removeEntity(shapeId).then(() => {
-                    widgetData.orderLines.delete(orderId);
-                    console.log(`✅ [removeOrderLine] Line removed for order ${orderId}`);
-                }).catch((error) => {
-                    console.error('❌ Error removing order line:', error);
-                });
+                // Удаляем и линию, и прямоугольник
+                if (typeof shapeIds === 'object' && shapeIds.lineId && shapeIds.rectId) {
+                    // Новая структура: объект с lineId и rectId
+                    activeChart.removeEntity(shapeIds.rectId).then(() => {
+                        return activeChart.removeEntity(shapeIds.lineId);
+                    }).then(() => {
+                        widgetData.orderLines.delete(orderId);
+                        console.log(`✅ [removeOrderLine] Line and rectangle removed for order ${orderId}`);
+                    }).catch((error) => {
+                        console.error('❌ Error removing order line/rectangle:', error);
+                    });
+                } else if (typeof shapeIds === 'string') {
+                    // Старая структура: просто ID
+                    activeChart.removeEntity(shapeIds).then(() => {
+                        widgetData.orderLines.delete(orderId);
+                        console.log(`✅ [removeOrderLine] Line removed for order ${orderId}`);
+                    }).catch((error) => {
+                        console.error('❌ Error removing order line:', error);
+                    });
+                }
             } catch (error) {
                 console.error('❌ Error removing order line:', error);
             }

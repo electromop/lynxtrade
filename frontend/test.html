@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradingView Fixed Rectangle Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        
+        .chart-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #tv_chart_container {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .fixed-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Пропускаем события к мыши к чарту */
+            z-index: 100;
+        }
+        
+        .buy-rectangle {
+            position: absolute;
+            border: 2px solid #22c55e;
+            background-color: rgba(34, 197, 94, 0.2);
+            pointer-events: none; /* Блокируем все события мыши */
+            box-sizing: border-box;
+            min-width: 100px;
+            min-height: 50px;
+            user-select: none; /* Запрещаем выделение текста */
+        }
+        
+        .buy-rectangle .price-label {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            background: #22c55e;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        
+        .sell-rectangle {
+            position: absolute;
+            border: 2px solid #ef4444;
+            background-color: rgba(239, 68, 68, 0.2);
+            pointer-events: none; /* Блокируем все события мыши */
+            box-sizing: border-box;
+            min-width: 100px;
+            min-height: 50px;
+            user-select: none; /* Запрещаем выделение текста */
+        }
+        
+        .sell-rectangle .price-label {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            background: #ef4444;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 5px;
+        }
+        
+        button {
+            background: #22c55e;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #16a34a;
+        }
+        
+        .info {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #aaa;
+        }
+    </style>
+    <!-- TradingView Charting Library -->
+    <script type="text/javascript" src="https://charting-library.tradingview-widget.com/charting_library/charting_library.standalone.js"></script>
+    <script type="text/javascript" src="https://charting-library.tradingview-widget.com/datafeeds/udf/dist/bundle.js"></script>
+</head>
+<body>
+    <div class="chart-container">
+        <div id="tv_chart_container"></div>
+        <div class="fixed-overlay" id="chart-overlay"></div>
+    </div>
+    
+    <div class="controls">
+        <div style="margin-bottom: 10px;">
+            <label for="priceInput" style="display: block; margin-bottom: 5px; font-size: 12px; color: #aaa;">Price:</label>
+            <input type="number" id="priceInput" value="175.0" step="0.01" style="width: 100px; padding: 5px; background: #1a1a1a; border: 1px solid #333; color: white; border-radius: 3px; font-size: 14px;">
+        </div>
+        <button id="createRectBtn">Create Fixed Rectangle</button>
+        <button id="clearRectBtn">Clear All</button>
+        <div class="info" id="info">Enter price and click "Create Fixed Rectangle"</div>
+    </div>
+
+    <script>
+        let widget = null;
+        let zoneManager = null;
+
+        class FixedBuyZoneManager {
+            constructor(chartWidget, overlayId = 'chart-overlay') {
+                this.chart = chartWidget;
+                this.overlay = document.getElementById(overlayId);
+                this.buyZones = new Map();
+                this.currentZoneId = 0;
+                this.animationFrameId = null;
+                
+                this.init();
+            }
+            
+            init() {
+                // Подписываемся на события изменения графика
+                this.chart.onChartReady(() => {
+                    const activeChart = this.chart.activeChart();
+                    
+                    // Обновляем размер overlay при изменении размера графика
+                    this.updateOverlaySize();
+                    
+                    // Запускаем анимационный цикл для обновления позиций
+                    this.startAnimationLoop();
+                    
+                    // Обновляем при изменении размера окна
+                    window.addEventListener('resize', () => {
+                        this.updateOverlaySize();
+                    });
+                });
+            }
+            
+            /**
+             * Добавляет фиксированный прямоугольник покупки
+             * @param {number} screenX - X координата в пикселях (от левого края)
+             * @param {number} screenY - Y координата в пикселях (от верхнего края)
+             * @param {number} width - Ширина в пикселях
+             * @param {number} height - Высота в пикселях
+             * @param {number} price - Цена покупки (для отображения)
+             * @param {string} side - 'BUY' или 'SELL'
+             */
+            addFixedBuyZone(screenX, screenY, width = 200, height = 80, price, side = 'BUY') {
+                const zoneId = `buy-zone-${this.currentZoneId++}`;
+                
+                // Создаем DOM элемент
+                const zoneElement = document.createElement('div');
+                zoneElement.className = side === 'BUY' ? 'buy-rectangle' : 'sell-rectangle';
+                zoneElement.id = zoneId;
+                zoneElement.style.width = `${width}px`;
+                zoneElement.style.height = `${height}px`;
+                zoneElement.style.left = `${screenX}px`;
+                zoneElement.style.top = `${screenY}px`;
+                
+                // Добавляем лейбл с ценой
+                const label = document.createElement('div');
+                label.className = 'price-label';
+                label.textContent = `${side}: $${price.toFixed(2)}`;
+                zoneElement.appendChild(label);
+                
+                // Добавляем на overlay
+                this.overlay.appendChild(zoneElement);
+                
+                // Сохраняем зону
+                this.buyZones.set(zoneId, {
+                    element: zoneElement,
+                    screenX,
+                    screenY,
+                    width,
+                    height,
+                    price,
+                    side
+                });
+                
+                // Перетаскивание отключено - прямоугольник фиксирован
+                // this.makeDraggable(zoneElement, zoneId); // Закомментировано
+                
+                console.log(`✅ Fixed zone created: ${zoneId} at (${screenX}, ${screenY}) - locked position`);
+                
+                return zoneId;
+            }
+            
+            /**
+             * Конвертирует цену в Y координату экрана
+             * @param {number} price - Цена для конвертации
+             * @returns {number} Y координата в пикселях или null если не удалось
+             */
+            priceToScreenY(price) {
+                try {
+                    const activeChart = this.chart.activeChart();
+                    if (!activeChart) {
+                        return null;
+                    }
+                    
+                    const container = this.chart.container || document.getElementById('tv_chart_container');
+                    if (!container) {
+                        return null;
+                    }
+                    
+                    const containerRect = container.getBoundingClientRect();
+                    const containerHeight = containerRect.height;
+                    
+                    console.log(`📊 Converting price ${price} to Y coordinate, container height: ${containerHeight}`);
+                    
+                    // Пробуем получить информацию о price scale через серию
+                    try {
+                        // Получаем все серии
+                        const allSeries = activeChart.getAllSeries ? activeChart.getAllSeries() : [];
+                        console.log(`📊 Found ${allSeries.length} series`);
+                        
+                        // Ищем основную серию (обычно первая)
+                        let mainSeries = null;
+                        if (allSeries.length > 0) {
+                            mainSeries = allSeries[0];
+                        } else {
+                            // Пробуем получить через другой метод
+                            const series = activeChart.getSeries();
+                            if (series && series.length > 0) {
+                                mainSeries = series[0];
+                            }
+                        }
+                        
+                        if (mainSeries) {
+                            console.log(`📊 Main series found:`, mainSeries);
+                            
+                            // Пробуем получить диапазон цен
+                            if (typeof mainSeries.getPriceRange === 'function') {
+                                const priceRange = mainSeries.getPriceRange();
+                                console.log(`📊 Price range from series:`, priceRange);
+                                
+                                if (priceRange && priceRange.min !== undefined && priceRange.max !== undefined) {
+                                    const minPrice = priceRange.min;
+                                    const maxPrice = priceRange.max;
+                                    const priceSpan = maxPrice - minPrice;
+                                    
+                                    if (priceSpan > 0) {
+                                        // Вычисляем Y координату (Y = 0 вверху, поэтому инвертируем)
+                                        // priceRange.min соответствует верхней части графика (максимальный Y)
+                                        // priceRange.max соответствует нижней части графика (минимальный Y)
+                                        const normalizedPrice = (price - minPrice) / priceSpan;
+                                        const y = containerHeight * (1 - normalizedPrice);
+                                        
+                                        console.log(`📊 Price to Y conversion: price=${price}, min=${minPrice}, max=${maxPrice}, normalized=${normalizedPrice}, y=${y}`);
+                                        return Math.max(0, Math.min(containerHeight, y));
+                                    }
+                                }
+                            }
+                            
+                            // Альтернативный способ: используем coordinateToPrice в обратном направлении
+                            // Пробуем разные Y координаты и находим нужную
+                            if (typeof mainSeries.coordinateToPrice === 'function') {
+                                // Бинарный поиск для нахождения Y координаты
+                                let topY = 0;
+                                let bottomY = containerHeight;
+                                const tolerance = 0.01; // Точность 1 цент
+                                
+                                for (let i = 0; i < 20; i++) { // Максимум 20 итераций
+                                    const testY = (topY + bottomY) / 2;
+                                    const testPrice = mainSeries.coordinateToPrice(testY);
+                                    
+                                    if (Math.abs(testPrice - price) < tolerance) {
+                                        console.log(`📊 Found Y coordinate via binary search: y=${testY}, price=${testPrice}`);
+                                        return testY;
+                                    }
+                                    
+                                    if (testPrice > price) {
+                                        topY = testY;
+                                    } else {
+                                        bottomY = testY;
+                                    }
+                                }
+                                
+                                const finalY = (topY + bottomY) / 2;
+                                const finalPrice = mainSeries.coordinateToPrice(finalY);
+                                console.log(`📊 Approximate Y coordinate: y=${finalY}, price=${finalPrice}`);
+                                return finalY;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn('Could not get price range from series:', e);
+                    }
+                    
+                    // Fallback: используем приблизительный расчет для AAPL
+                    // Для AAPL в марте 2018 цена была около 170-180
+                    const estimatedMinPrice = 160;
+                    const estimatedMaxPrice = 190;
+                    const estimatedPriceSpan = estimatedMaxPrice - estimatedMinPrice;
+                    
+                    if (estimatedPriceSpan > 0) {
+                        const normalizedPrice = (price - estimatedMinPrice) / estimatedPriceSpan;
+                        const y = containerHeight * (1 - normalizedPrice);
+                        
+                        console.log(`📊 Using estimated price range: price=${price}, y=${y}`);
+                        return Math.max(0, Math.min(containerHeight, y));
+                    }
+                    
+                    return null;
+                } catch (error) {
+                    console.error('Error converting price to Y:', error);
+                    return null;
+                }
+            }
+            
+            /**
+             * Добавляет прямоугольник по цене (с конвертацией в экранные координаты)
+             * @param {number} price - Цена для позиционирования
+             * @param {string} side - 'BUY' или 'SELL'
+             */
+            addBuyZoneByPrice(price, side = 'BUY') {
+                try {
+                    const activeChart = this.chart.activeChart();
+                    if (!activeChart) {
+                        console.error('Active chart not available');
+                        return null;
+                    }
+                    
+                    // Получаем размеры контейнера
+                    const container = this.chart.container || document.getElementById('tv_chart_container');
+                    if (!container) {
+                        console.error('Container not found');
+                        return null;
+                    }
+                    
+                    // Используем clientWidth/clientHeight вместо getBoundingClientRect для координат относительно контейнера
+                    const containerWidth = container.clientWidth;
+                    const containerHeight = container.clientHeight;
+                    const centerX = containerWidth / 2;
+                    
+                    console.log(`📊 Container dimensions: ${containerWidth}x${containerHeight}`);
+                    
+                    // Конвертируем цену в Y координату
+                    const screenY = this.priceToScreenY(price);
+                    if (screenY === null) {
+                        console.error('Could not convert price to screen Y');
+                        // Fallback: используем центр экрана
+                        const centerY = containerHeight / 2;
+                        const width = 200;
+                        const height = 80;
+                        return this.addFixedBuyZone(centerX - width / 2, centerY - height / 2, width, height, price, side);
+                    }
+                    
+                    // Размеры прямоугольника
+                    const width = 200;
+                    const height = 80;
+                    
+                    // Позиционируем по центру по X и по цене по Y
+                    // Вычитаем половину высоты, чтобы центр прямоугольника был на уровне цены
+                    // Координаты должны быть относительно контейнера (0,0 в левом верхнем углу контейнера)
+                    const x = centerX - width / 2;
+                    const y = screenY - height / 2;
+                    
+                    console.log(`📊 Creating rectangle at price ${price}: screenY=${screenY}, x=${x}, y=${y}, container=${containerWidth}x${containerHeight}`);
+                    
+                    return this.addFixedBuyZone(x, y, width, height, price, side);
+                } catch (error) {
+                    console.error('Error adding zone by price:', error);
+                    return null;
+                }
+            }
+            
+            /**
+             * Делает элемент перетаскиваемым (ОТКЛЮЧЕНО - прямоугольники заблокированы)
+             */
+            makeDraggable(element, zoneId) {
+                // Перетаскивание отключено - прямоугольники фиксированы
+                // Этот метод больше не используется
+                return;
+            }
+            
+            /**
+             * Обновляет размер overlay
+             */
+            updateOverlaySize() {
+                try {
+                    const container = this.chart.container || document.getElementById('tv_chart_container');
+                    if (container) {
+                        this.overlay.style.width = container.clientWidth + 'px';
+                        this.overlay.style.height = container.clientHeight + 'px';
+                    }
+                } catch (e) {
+                    console.warn('Error updating overlay size:', e);
+                }
+            }
+            
+            /**
+             * Анимационный цикл для обновления
+             */
+            startAnimationLoop() {
+                const update = () => {
+                    this.updateOverlaySize();
+                    this.animationFrameId = requestAnimationFrame(update);
+                };
+                this.animationFrameId = requestAnimationFrame(update);
+            }
+            
+            stopAnimationLoop() {
+                if (this.animationFrameId) {
+                    cancelAnimationFrame(this.animationFrameId);
+                    this.animationFrameId = null;
+                }
+            }
+            
+            /**
+             * Удаляет зону
+             */
+            removeZone(zoneId) {
+                const zone = this.buyZones.get(zoneId);
+                if (zone) {
+                    zone.element.remove();
+                    this.buyZones.delete(zoneId);
+                }
+            }
+            
+            /**
+             * Удаляет все зоны
+             */
+            clearAll() {
+                this.buyZones.forEach((zone, zoneId) => {
+                    this.removeZone(zoneId);
+                });
+            }
+        }
+
+        function initChart() {
+            if (typeof TradingView === 'undefined' || !TradingView.widget) {
+                console.error('TradingView library not loaded');
+                document.getElementById('info').textContent = 'Error: TradingView library not loaded';
+                return;
+            }
+
+            console.log('Initializing TradingView chart...');
+
+            widget = new TradingView.widget({
+                library_path: 'https://charting-library.tradingview-widget.com/charting_library/',
+                fullscreen: true, // Разворачиваем график на весь экран
+                symbol: 'AAPL',
+                interval: '1D',
+                container: 'tv_chart_container',
+                datafeed: new Datafeeds.UDFCompatibleDatafeed("https://demo-feed-data.tradingview.com"),
+                locale: 'en',
+                disabled_features: [
+                    'use_localstorage_for_settings',
+                    'volume_force_overlay',
+                    'create_volume_indicator_by_default',
+                ],
+                enabled_features: [],
+                theme: 'dark',
+                overrides: {
+                    'paneProperties.background': '#000000',
+                    'paneProperties.vertGridProperties.color': '#1a1a1a',
+                    'paneProperties.horzGridProperties.color': '#1a1a1a',
+                },
+            });
+
+            widget.onChartReady(() => {
+                console.log('✅ Chart ready!');
+                document.getElementById('info').textContent = 'Chart ready! Click "Create Fixed Rectangle" to test.';
+                
+                // Инициализируем менеджер зон
+                zoneManager = new FixedBuyZoneManager(widget);
+                
+                // Автоматически создаем тестовый прямоугольник через 2 секунды
+                setTimeout(() => {
+                    createTestRectangle();
+                }, 2000);
+            });
+        }
+
+        function createTestRectangle() {
+            if (!zoneManager) {
+                console.error('Zone manager not initialized');
+                return;
+            }
+
+            try {
+                // Получаем цену из input поля
+                const priceInput = document.getElementById('priceInput');
+                const price = parseFloat(priceInput.value);
+                
+                if (isNaN(price) || price <= 0) {
+                    document.getElementById('info').textContent = 'Please enter a valid price';
+                    return;
+                }
+                
+                // Создаем прямоугольник на уровне введенной цены
+                const zoneId = zoneManager.addBuyZoneByPrice(price, 'BUY');
+                
+                if (zoneId) {
+                    document.getElementById('info').textContent = `Fixed rectangle created at price $${price.toFixed(2)}! ID: ${zoneId}. Try scrolling the chart.`;
+                    console.log(`✅ Test rectangle created at price ${price}`);
+                } else {
+                    document.getElementById('info').textContent = 'Error creating rectangle';
+                }
+            } catch (error) {
+                console.error('❌ Exception:', error);
+                document.getElementById('info').textContent = `Exception: ${error.message}`;
+            }
+        }
+
+        function clearAllRectangles() {
+            if (zoneManager) {
+                zoneManager.clearAll();
+                document.getElementById('info').textContent = 'All rectangles cleared';
+                console.log('All rectangles cleared');
+            }
+        }
+
+        // Инициализация при загрузке страницы
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM Content Loaded');
+            initChart();
+        });
+
+        // Обработчики кнопок
+        document.getElementById('createRectBtn').addEventListener('click', createTestRectangle);
+        document.getElementById('clearRectBtn').addEventListener('click', clearAllRectangles);
+    </script>
+</body>
+</html>
