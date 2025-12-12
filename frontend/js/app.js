@@ -1,7 +1,12 @@
 // API_BASE объявлен в datafeed.js как window.API_BASE
 // Используем напрямую window.API_BASE
+// Устанавливаем API_BASE, если он еще не установлен
+if (!window.API_BASE) {
+    window.API_BASE = window.location.origin + '/api';
+    console.log('🔧 API_BASE установлен:', window.API_BASE);
+}
 
-// currentPairId управляется через window.tradingViewModule
+// currentPairId управляется через window.chartModule
 let socket = null;
 let selectedPairs = [];
 let activePairId = null; // Текущая активная пара в UI
@@ -9,23 +14,21 @@ let activeRounds = [];
 let userBalance = 10000.0;
 let tradeAmount = 5.0;
 let tradeDuration = 60; // секунды
+// currentTimeframe объявлен в chart.js
 
 // Хранение времени сервера (UTC) в секундах (Unix timestamp)
 let serverTimeUTC = null;
 
 // Инициализация
 document.addEventListener('DOMContentLoaded', () => {
-    // Ждем загрузки TradingView библиотеки
+    // Ждем загрузки LightweightCharts библиотеки
     console.log('🚀 DOM Content Loaded');
-    console.log('📦 TradingView:', typeof TradingView !== 'undefined' ? '✅ loaded' : '❌ not loaded');
-    console.log('📦 Datafeeds:', typeof Datafeeds !== 'undefined' ? '✅ loaded' : '❌ not loaded');
-    console.log('📦 LynxBroker:', typeof LynxBroker !== 'undefined' ? '✅ loaded' : '❌ not loaded');
+    console.log('📦 LightweightCharts:', typeof LightweightCharts !== 'undefined' ? '✅ loaded' : '❌ not loaded');
     
     function waitForLibrary() {
-        if (typeof TradingView !== 'undefined' && typeof Datafeeds !== 'undefined') {
-            console.log('✅ All libraries loaded, initializing...');
+        if (typeof LightweightCharts !== 'undefined') {
+            console.log('✅ LightweightCharts loaded, initializing...');
             initSocket();
-            initTradingView();
             loadPairs();
             loadBalance();
             setupEventListeners();
@@ -34,18 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Запускаем HTTP polling для server time
             startServerTimePolling();
         } else {
-            console.log('⏳ Waiting for libraries...');
+            console.log('⏳ Waiting for LightweightCharts library...');
             setTimeout(waitForLibrary, 100);
         }
     }
     waitForLibrary();
 });
 
-function initTradingView() {
-    // TradingView будет инициализирован после создания окон
-    // Эта функция вызывается из updateSelectedPair после создания структуры
-    console.log('TradingView initialization will happen after windows are created');
-}
+// initTradingView удалена - теперь используется chartModule
 
 function initSocket() {
     console.log('🔌 Initializing socket connection to http://127.0.0.1:5500');
@@ -144,15 +143,19 @@ function initSocket() {
     // WebSocket price_update больше не используется - используем HTTP polling
 }
 
-// initChart удалена - теперь используется initTradingView в DOMContentLoaded
+// initChart удалена - теперь используется chartModule.initChart
 
 async function loadPairs() {
     try {
+        // Убеждаемся, что API_BASE установлен
+        if (!window.API_BASE) {
+            window.API_BASE = window.location.origin + '/api';
+        }
         const response = await fetch(`${window.API_BASE}/pairs`);
         const pairs = await response.json();
         
         if (pairs.length > 0) {
-            // Ищем AAPL для тестирования TradingView, если есть - используем её
+            // Ищем первую доступную пару для инициализации
             let defaultPair = pairs.find(p => p.symbol === 'AAPL') || pairs[0];
             
             selectedPairs = [defaultPair];
@@ -162,14 +165,14 @@ async function loadPairs() {
             // Обновляем отображение (создаст вкладки и окна)
             updateSelectedPair(defaultPair);
             
-            // Инициализируем TradingView для активного окна
+            // Инициализируем график для активного окна
             setTimeout(() => {
                 const windowData = pairWindows.get(activePairId);
-                if (windowData && window.tradingViewModule) {
+                if (windowData && window.chartModule) {
                     const chartId = windowData.windowElement.getAttribute('data-chart-id');
                     const chartContainer = windowData.windowElement.querySelector(`#${chartId}`);
                     if (chartContainer) {
-                        window.tradingViewModule.init(activePairId, chartContainer);
+                        window.chartModule.initChart(activePairId, chartContainer);
                     }
                 }
             }, 100);
@@ -184,6 +187,10 @@ async function loadPairs() {
 
 async function loadBalance() {
     try {
+        // Убеждаемся, что API_BASE установлен
+        if (!window.API_BASE) {
+            window.API_BASE = window.location.origin + '/api';
+        }
         const response = await fetch(`${window.API_BASE}/balance?user_id=1`);
         const data = await response.json();
         userBalance = data.balance;
@@ -195,17 +202,19 @@ async function loadBalance() {
 
 async function loadActiveRounds() {
     try {
-        const response = await fetch(`${window.API_BASE}/rounds/active?user_id=1`);
+        // Убеждаемся, что API_BASE установлен
+        if (!window.API_BASE) {
+            window.API_BASE = window.location.origin + '/api';
+        }
+        const url = `${window.API_BASE}/rounds/active?user_id=1`;
+        console.log('📋 Fetching active rounds from:', url);
+        const response = await fetch(url);
         const rounds = await response.json();
         activeRounds = rounds;
         updateActiveRoundsDisplay();
         
-        // Уведомляем TradingView об обновлении ордеров
-        const broker = window.tradingViewModule?.getBroker();
-        if (broker && broker._host) {
-            // TradingView автоматически обновит отображение ордеров через метод orders()
-            console.log('📋 Active rounds updated, TradingView will refresh orders');
-        }
+        // Обновление ордеров на графике происходит автоматически через drawOrderLine
+        console.log('📋 Active rounds updated');
     } catch (error) {
         console.error('Error loading active rounds:', error);
     }
@@ -214,7 +223,12 @@ async function loadActiveRounds() {
 // Периодическое обновление активных раундов
 setInterval(async () => {
     try {
-        const response = await fetch(`${window.API_BASE}/rounds/active?user_id=1`);
+        // Убеждаемся, что API_BASE установлен
+        if (!window.API_BASE) {
+            window.API_BASE = window.location.origin + '/api';
+        }
+        const url = `${window.API_BASE}/rounds/active?user_id=1`;
+        const response = await fetch(url);
         const rounds = await response.json();
         
         if (!Array.isArray(rounds)) {
@@ -319,8 +333,8 @@ function updateSelectedPair(activePair) {
             pair: p
         });
         
-        // Инициализируем TradingView для этого окна
-        initTradingViewForWindow(p.id, windowElement);
+        // Инициализируем график для этого окна
+        initChartForWindow(p.id, windowElement);
     });
     
     // Активируем выбранную пару
@@ -492,18 +506,18 @@ function setupRightbarHandlers(windowElement, pairId) {
     });
 }
 
-function initTradingViewForWindow(pairId, windowElement) {
+function initChartForWindow(pairId, windowElement) {
     const chartId = windowElement.getAttribute('data-chart-id');
     const chartContainer = windowElement.querySelector(`#${chartId}`);
     
-    if (!chartContainer || !window.tradingViewModule) {
-        console.warn(`Cannot init TradingView for pair ${pairId}: container or module not found`);
+    if (!chartContainer || !window.chartModule) {
+        console.warn(`Cannot init chart for pair ${pairId}: container or module not found`);
         return;
     }
     
-    // Инициализируем TradingView для этого окна только если оно активно
+    // Инициализируем график для этого окна только если оно активно
     if (pairId === activePairId) {
-        window.tradingViewModule.init(pairId, chartContainer);
+        window.chartModule.initChart(pairId, chartContainer);
     }
 }
 
@@ -524,15 +538,16 @@ function switchToPair(pairId) {
         }
     });
     
-    // Инициализируем TradingView для активного окна, если еще не инициализирован
+    // Инициализируем график для активного окна, если еще не инициализирован
     const windowData = pairWindows.get(pairId);
-    if (windowData && window.tradingViewModule) {
+    if (windowData && window.chartModule) {
         const chartId = windowData.windowElement.getAttribute('data-chart-id');
         const chartContainer = windowData.windowElement.querySelector(`#${chartId}`);
-        if (chartContainer && !chartContainer.querySelector('iframe')) {
-            window.tradingViewModule.init(pairId, chartContainer);
+        if (chartContainer && !chartContainer.querySelector('.chart-wrapper')) {
+            window.chartModule.initChart(pairId, chartContainer);
         } else {
-            window.tradingViewModule.updatePair(pairId);
+            const timeframe = window.chartModule ? window.chartModule.getCurrentTimeframe() : '1m';
+            window.chartModule.updateChart(pairId, timeframe);
         }
     }
     
@@ -584,6 +599,11 @@ function showAddPairModal() {
     
     // Инициализируем меню категорий
     initCategoryMenu();
+    
+    // Убеждаемся, что API_BASE установлен
+    if (!window.API_BASE) {
+        window.API_BASE = window.location.origin + '/api';
+    }
     
     fetch(`${window.API_BASE}/pairs`)
         .then(res => res.json())
@@ -796,7 +816,13 @@ function updateServerTime(timeStr) {
 function startServerTimePolling() {
     const pollServerTime = async () => {
         try {
-            const response = await fetch(`${window.API_BASE}/server-time`);
+            // Убеждаемся, что API_BASE установлен
+            if (!window.API_BASE) {
+                window.API_BASE = window.location.origin + '/api';
+            }
+            const url = `${window.API_BASE}/server-time`;
+            console.log('🕐 Fetching server time from:', url);
+            const response = await fetch(url);
             if (response.ok) {
                 const data = await response.json();
                 
@@ -835,7 +861,7 @@ window.getServerTimeUTC = function() {
 };
 
 // HTTP Polling для обновления цен свечей (надежный способ вместо WebSocket)
-// startPricePolling удалена - TradingView обновляет данные автоматически через datafeed.subscribeBars
+// startPricePolling удалена - LightweightCharts обновляет данные автоматически через updateLastCandle
 
 
 async function createRound(direction, pairId = null) {
@@ -856,6 +882,11 @@ async function createRound(direction, pairId = null) {
         amount: tradeAmount,
         duration: tradeDuration,
     };
+    
+    // Убеждаемся, что API_BASE установлен
+    if (!window.API_BASE) {
+        window.API_BASE = window.location.origin + '/api';
+    }
     
     console.log('🛒 [createRound] Request data:', requestData);
     console.log('🛒 [createRound] API URL:', `${window.API_BASE}/rounds`);
@@ -889,11 +920,8 @@ async function createRound(direction, pairId = null) {
             // Если start_price не валиден, используем fallback
             if (!orderPrice || orderPrice === 0 || isNaN(orderPrice)) {
                 console.warn('⚠️ [createRound] Invalid start_price from server, using fallback');
-                const symbol = window.tradingViewModule?.getSymbol(targetPairId) || 'AAPL';
-                const demoSymbols = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN'];
-                const demoSymbolPrices = { 'AAPL': 175.0, 'MSFT': 380.0, 'GOOGL': 140.0, 'TSLA': 250.0, 'AMZN': 150.0 };
-                orderPrice = demoSymbolPrices[symbol] || 100.0;
-                console.warn(`⚠️ Using fallback price for ${symbol}: ${orderPrice}`);
+                orderPrice = 100.0;
+                console.warn(`⚠️ Using fallback price: ${orderPrice}`);
             }
             
             // Убеждаемся, что цена валидна
@@ -905,14 +933,14 @@ async function createRound(direction, pairId = null) {
             console.log(`💰 [createRound] Using order price: ${orderPrice} (from round.start_price)`);
             
             // Рисуем горизонтальную линию по цене ордера на графике
-            if (window.tradingViewModule && window.tradingViewModule.drawOrderLine) {
+            if (window.chartModule && window.chartModule.drawOrderLine) {
                 // Получаем время создания ордера из round.start_time
                 const orderTime = round.start_time ? new Date(round.start_time).getTime() / 1000 : Math.floor(Date.now() / 1000);
                 console.log(`📏 [createRound] Drawing order line at price ${orderPrice} (start_price: ${round.start_price}) for ${direction} order`);
                 console.log(`📏 [createRound] Order time: ${orderTime} (from start_time: ${round.start_time})`);
                 // Передаем end_time для обратного отсчета
                 const endTime = round.end_time || null;
-                window.tradingViewModule.drawOrderLine(
+                window.chartModule.drawOrderLine(
                     targetPairId,
                     orderPrice, // Это round.start_price (цена создания ордера)
                     round.id.toString(),
@@ -1080,9 +1108,9 @@ setInterval(updateCandleTimeRemaining, 1000);
 updateCandleTimeRemaining(); // Сразу обновляем
 
 // Функция для обновления цены на графике
-// TradingView обновляет данные автоматически через datafeed.subscribeBars
+// LightweightCharts обновляет данные автоматически через updateLastCandle
 function updateChartPrice(data) {
-    // TradingView обрабатывает обновления автоматически
+    // График обрабатывает обновления автоматически
     console.log('💰 [updateChartPrice] Price update received:', data);
 }
 
