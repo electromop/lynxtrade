@@ -66,6 +66,8 @@ function initChart(pairId = 1, containerElement = null) {
         display: flex;
         flex-direction: column;
         padding: 4px 0;
+        flex: 1;
+        min-height: 0;
     `;
     
     // Группа 1: Курсоры и инструменты рисования
@@ -156,6 +158,11 @@ function initChart(pairId = 1, containerElement = null) {
     
     toolbarContent.appendChild(group1);
     
+    // Горизонтальный сепаратор перед группой 2
+    const separator1 = document.createElement('div');
+    separator1.style.cssText = 'width: calc(100% - 8px); height: 1px; background: #393b3f; margin: 4px 4px;';
+    toolbarContent.appendChild(separator1);
+    
     // Группа 2: Измерение и масштаб
     const group2 = createToolbarGroup();
     
@@ -179,6 +186,11 @@ function initChart(pairId = 1, containerElement = null) {
     group2.appendChild(zoomBtn);
     
     toolbarContent.appendChild(group2);
+    
+    // Горизонтальный сепаратор перед группой 3
+    const separator2 = document.createElement('div');
+    separator2.style.cssText = 'width: calc(100% - 8px); height: 1px; background: #393b3f; margin: 4px 4px;';
+    toolbarContent.appendChild(separator2);
     
     // Группа 3: Управление инструментами
     const group3 = createToolbarGroup();
@@ -226,6 +238,11 @@ function initChart(pairId = 1, containerElement = null) {
         </svg>
     `);
     group3.appendChild(hideDropdown);
+    
+    // Горизонтальный сепаратор перед корзиной
+    const separator3 = document.createElement('div');
+    separator3.style.cssText = 'width: calc(100% - 8px); height: 1px; background: #393b3f; margin: 4px 4px;';
+    group3.appendChild(separator3);
     
     // Удалить все
     const removeDropdown = createDropdownTool('removeAllDrawingTools', 'Remove 0 drawings', false, `
@@ -497,26 +514,22 @@ function initChart(pairId = 1, containerElement = null) {
         const indicatorsWrap = document.createElement('div');
         indicatorsWrap.className = 'wrap-n5bmFxyX';
         indicatorsWrap.id = 'header-toolbar-indicators';
-        const indicatorsButton = document.createElement('button');
-        indicatorsButton.type = 'button';
-        indicatorsButton.className = 'button-OhqNVIYA button-ptpAHg8E withText-ptpAHg8E button-GwQQdU8S apply-common-tooltip isInteractive-GwQQdU8S accessible-GwQQdU8S';
-        indicatorsButton.setAttribute('data-name', 'open-indicators-dialog');
-        indicatorsButton.setAttribute('data-tooltip', 'Indicators & Strategies');
-        indicatorsButton.setAttribute('aria-label', 'Indicators & Strategies');
-        indicatorsButton.setAttribute('tabindex', '-1');
-        const indicatorsBg = document.createElement('div');
-        indicatorsBg.className = 'bg-KTgbfaP5';
-        indicatorsBg.style.cssText = 'display: flex; align-items: center; justify-content: center; gap: 6px;';
+        indicatorsWrap.style.cssText = 'display: flex; align-items: center; height: 100%;';
+        const indicatorsContainer = document.createElement('div');
+        indicatorsContainer.className = 'apply-common-tooltip isInteractive-GwQQdU8S';
+        indicatorsContainer.setAttribute('data-name', 'open-indicators-dialog');
+        indicatorsContainer.setAttribute('data-tooltip', 'Indicators & Strategies');
+        indicatorsContainer.setAttribute('aria-label', 'Indicators & Strategies');
+        indicatorsContainer.style.cssText = 'display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 0 8px; height: 36px;';
         const indicatorsIcon = document.createElement('span');
         indicatorsIcon.className = 'icon-KTgbfaP5';
         indicatorsIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28" width="28" height="28" fill="none"><path stroke="currentColor" d="M20 17l-5 5M15 17l5 5M9 11.5h7M17.5 8a2.5 2.5 0 0 0-5 0v11a2.5 2.5 0 0 1-5 0"></path></svg>';
         const indicatorsText = document.createElement('div');
         indicatorsText.className = 'js-button-text text-GwQQdU8S';
         indicatorsText.textContent = 'Indicators';
-        indicatorsBg.appendChild(indicatorsIcon);
-        indicatorsBg.appendChild(indicatorsText);
-        indicatorsButton.appendChild(indicatorsBg);
-        indicatorsWrap.appendChild(indicatorsButton);
+        indicatorsContainer.appendChild(indicatorsIcon);
+        indicatorsContainer.appendChild(indicatorsText);
+        indicatorsWrap.appendChild(indicatorsContainer);
         indicatorsGroup.appendChild(indicatorsWrap);
         innerWrap.appendChild(indicatorsGroup);
         
@@ -706,12 +719,12 @@ function initChart(pairId = 1, containerElement = null) {
         // Создаем график
         const chart = LightweightCharts.createChart(chartCanvasContainer, {
             layout: {
-                background: { color: '#000000' },
+                background: { type: 'solid', color: 'transparent' },
                 textColor: '#8b8fa3',
             },
             grid: {
-                vertLines: { color: '#1e2330' },
-                horzLines: { color: '#1e2330' },
+                vertLines: { color: '#393b3f' },
+                horzLines: { color: '#393b3f' },
             },
             crosshair: {
                 mode: LightweightCharts.CrosshairMode.Normal,

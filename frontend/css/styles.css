@@ -459,8 +459,7 @@ section[id^="window_"] .chart iframe {
     display: flex;
     flex-direction: column;
     padding: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
     flex-shrink: 0;
 }
 
@@ -469,6 +468,8 @@ section[id^="window_"] .chart iframe {
     flex-direction: column;
     padding: 4px 0;
     width: 100%;
+    flex: 1;
+    min-height: 0;
 }
 
 .group-BfVZxb4b {
@@ -686,6 +687,32 @@ svg {
     flex: 1;
     position: relative;
     min-height: 0;
+    background: 
+        radial-gradient(ellipse at top right, rgba(163, 244, 27, 0.30) 0%, rgba(163, 244, 27, 0.07) 35%, transparent 55%),
+        radial-gradient(ellipse at bottom left, rgba(78, 171, 212, 0.30) 0%, rgba(78, 171, 212, 0.07) 35%, transparent 55%),
+        #000000;
+}
+
+.chart-canvas-container::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 250px;
+    height: 250px;
+    background-image: url('../img/favicon_lynx.png');
+    background-size: contain;
+    background-position: center center;
+    background-repeat: no-repeat;
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.chart-canvas-container > div {
+    position: relative;
+    z-index: 2;
 }
 
 .chart-footer {
@@ -727,8 +754,8 @@ svg {
 .separator-xVhBjD5m.separator-MBOVGQRI {
     width: 1px;
     height: 20px;
-    background: unset;
-    background-color: unset;
+    background: #1e2330;
+    background-color: #1e2330;
     background-image: none;
     color: rgba(67, 70, 81, 1);
 }
