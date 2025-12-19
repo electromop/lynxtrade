@@ -80,26 +80,15 @@ def init_db():
     
     cursor.execute('SELECT COUNT(*) FROM trading_pairs')
     if cursor.fetchone()[0] == 0:
-        # Сначала добавляем AAPL для тестирования TradingView
-        try:
-            cursor.execute('INSERT INTO trading_pairs (symbol, name) VALUES (?, ?)', ('AAPL', 'Apple Inc.'))
-            print('Added AAPL pair for TradingView testing')
-        except sqlite3.IntegrityError:
-            pass  # Если уже существует
-        
         # Загружаем пары с Binance API
         load_pairs_from_binance(cursor)
         conn.commit()
-    else:
-        # Проверяем, есть ли AAPL, если нет - добавляем
-        cursor.execute('SELECT COUNT(*) FROM trading_pairs WHERE symbol = ?', ('AAPL',))
-        if cursor.fetchone()[0] == 0:
-            try:
-                cursor.execute('INSERT INTO trading_pairs (symbol, name) VALUES (?, ?)', ('AAPL', 'Apple Inc.'))
-                conn.commit()
-                print('Added AAPL pair for TradingView testing')
-            except sqlite3.IntegrityError:
-                pass
+    
+    # Удаляем AAPL, если он есть (он не должен быть в списке Binance)
+    cursor.execute('DELETE FROM trading_pairs WHERE symbol = ?', ('AAPL',))
+    if cursor.rowcount > 0:
+        conn.commit()
+        print('Removed AAPL pair from database')
     
     conn.close()
 
@@ -135,19 +124,26 @@ def load_pairs_from_binance(cursor):
                         seen_symbols.add(symbol)
         
         # Сортируем: сначала популярные, потом остальные
+        # BTCUSDT должен быть первым
         popular_pairs = []
         other_pairs = []
+        btc_pair = None
         
         for pair in pairs_to_add:
             symbol = pair[0]
             base_asset = symbol.replace('USDT', '')
-            if base_asset in popular_symbols:
+            if symbol == 'BTCUSDT':
+                btc_pair = pair
+            elif base_asset in popular_symbols:
                 popular_pairs.append(pair)
             else:
                 other_pairs.append(pair)
         
-        # Ограничиваем до 30 пар (все популярные + остальные до лимита)
-        sorted_pairs = popular_pairs + other_pairs[:max(0, 30 - len(popular_pairs))]
+        # BTCUSDT всегда первый, потом остальные популярные, потом остальные
+        if btc_pair:
+            sorted_pairs = [btc_pair] + popular_pairs + other_pairs[:max(0, 30 - len(popular_pairs) - 1)]
+        else:
+            sorted_pairs = popular_pairs + other_pairs[:max(0, 30 - len(popular_pairs))]
         
         if sorted_pairs:
             cursor.executemany(
@@ -156,9 +152,8 @@ def load_pairs_from_binance(cursor):
             )
             print(f'Loaded {len(sorted_pairs)} pairs from Binance')
         else:
-            # Fallback на дефолтные пары (включая AAPL для тестирования)
+            # Fallback на дефолтные пары
             default_pairs = [
-                ('AAPL', 'Apple Inc.'),  # Для тестирования TradingView
                 ('BTCUSDT', 'Bitcoin'),
                 ('ETHUSDT', 'Ethereum'),
                 ('BNBUSDT', 'Binance Coin'),
@@ -172,9 +167,8 @@ def load_pairs_from_binance(cursor):
             print('Loaded default pairs (Binance API unavailable)')
     except Exception as e:
         print(f'Error loading pairs from Binance: {e}')
-        # Fallback на дефолтные пары (включая AAPL для тестирования)
+        # Fallback на дефолтные пары
         default_pairs = [
-            ('AAPL', 'Apple Inc.'),  # Для тестирования TradingView
             ('BTCUSDT', 'Bitcoin'),
             ('ETHUSDT', 'Ethereum'),
             ('BNBUSDT', 'Binance Coin'),

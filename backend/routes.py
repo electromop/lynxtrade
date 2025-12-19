@@ -48,20 +48,32 @@ def sync_pairs():
         conn = get_db()
         cursor = conn.cursor()
         
-        # Очищаем существующие пары (или можно обновлять)
+        # Очищаем существующие пары
         cursor.execute('DELETE FROM trading_pairs')
         
-        # Загружаем новые пары
+        # Загружаем новые пары с Binance
         load_pairs_from_binance(cursor)
+        
+        # Удаляем AAPL, если он все еще есть (он не должен быть в списке Binance)
+        cursor.execute('DELETE FROM trading_pairs WHERE symbol = ?', ('AAPL',))
         
         conn.commit()
         
         # Получаем количество загруженных пар
         cursor.execute('SELECT COUNT(*) FROM trading_pairs')
         count = cursor.fetchone()[0]
+        
+        # Получаем список загруженных пар
+        cursor.execute('SELECT id, symbol, name FROM trading_pairs ORDER BY symbol')
+        pairs = [{'id': row[0], 'symbol': row[1], 'name': row[2]} for row in cursor.fetchall()]
+        
         conn.close()
         
-        return jsonify({'message': 'Pairs synchronized successfully', 'count': count}), 200
+        return jsonify({
+            'message': 'Pairs synchronized successfully',
+            'count': count,
+            'pairs': pairs
+        }), 200
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -130,7 +142,7 @@ def create_round():
     # Получаем информацию о паре для ответа
     cursor.execute('SELECT symbol, name FROM trading_pairs WHERE id = ?', (pair_id,))
     pair_info = cursor.fetchone()
-    pair_symbol = pair_info[0] if pair_info else 'AAPL'
+    pair_symbol = pair_info[0] if pair_info else 'BTCUSDT'
     pair_name = pair_info[1] if pair_info else 'Unknown'
     
     conn.commit()
@@ -189,16 +201,24 @@ def get_chart_data(pair_id):
     timeframe = request.args.get('timeframe', '1m')
     limit = request.args.get('limit', 100, type=int)
     
+    print(f'📊 [get_chart_data] Request for pair_id={pair_id}, timeframe={timeframe}, limit={limit}')
+    
     # Пробуем получить реальные данные, если не получится - используем симуляцию
     try:
         candles = get_real_chart_data(pair_id, timeframe, limit)
         if candles:
+            print(f'✅ [get_chart_data] Got {len(candles)} real candles from Binance for pair {pair_id}')
             return jsonify(candles)
+        else:
+            print(f'⚠️ [get_chart_data] No real data returned, using simulation')
     except Exception as e:
-        print(f'Error fetching real data, using simulation: {e}')
+        print(f'❌ [get_chart_data] Error fetching real data, using simulation: {e}')
+        import traceback
+        traceback.print_exc()
     
     # Генерируем симулированные данные свечей как fallback
     candles = generate_candle_data(pair_id, timeframe, limit)
+    print(f'📊 [get_chart_data] Generated {len(candles)} simulated candles for pair {pair_id}')
     return jsonify(candles)
 
 @api.route('/server-time', methods=['GET'])
@@ -217,11 +237,45 @@ def get_current_pair_price(pair_id):
     """Получить текущую цену для пары"""
     try:
         price = get_current_price(pair_id)
+        timestamp = datetime.utcnow().timestamp()
+        formatted_time = datetime.utcnow().strftime('%H:%M:%S')
+        print(f'💰 [get_current_pair_price] Pair {pair_id}: price={price}, timestamp={timestamp}')
         return jsonify({
             'pair_id': pair_id,
             'price': price,
-            'timestamp': datetime.utcnow().timestamp()
+            'timestamp': timestamp,
+            'formatted': formatted_time
         })
+    except Exception as e:
+        print(f'❌ [get_current_pair_price] Error for pair {pair_id}: {e}')
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@api.route('/prices', methods=['GET'])
+def get_all_prices():
+    """Получить текущие цены для всех активных пар"""
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, symbol FROM trading_pairs WHERE active = 1')
+        pairs = cursor.fetchall()
+        conn.close()
+        
+        prices = {}
+        for pair_id, symbol in pairs:
+            try:
+                price = get_current_price(pair_id)
+                prices[pair_id] = {
+                    'symbol': symbol,
+                    'price': price,
+                    'timestamp': datetime.utcnow().timestamp()
+                }
+            except Exception as e:
+                print(f'Error getting price for pair {pair_id} ({symbol}): {e}')
+                continue
+        
+        return jsonify(prices)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -237,6 +291,17 @@ def get_win_rate():
     if row:
         return jsonify({'win_rate': int(row[0])})
     return jsonify({'win_rate': 50})
+
+import os
+from flask import send_from_directory
+
+# Статическая папка для картинок теперь backend/static/img
+IMG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'img')
+
+@api.route('/img/<path:filename>', methods=['GET'])
+def get_image(filename):
+    """Отдаём картинку из backend/static/img"""
+    return send_from_directory(IMG_DIR, filename)
 
 @api.route('/admin/win-rate', methods=['POST'])
 def set_win_rate():

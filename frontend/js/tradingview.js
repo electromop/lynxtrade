@@ -49,9 +49,10 @@ function initTradingView(pairId = 1, containerElement = null) {
         }
     }
     
-    // Используем демо datafeed от TradingView для тестирования
-    const datafeed = new Datafeeds.UDFCompatibleDatafeed("https://demo-feed-data.tradingview.com");
-    console.log(`📊 [initTradingView] Using demo datafeed for testing`);
+    // Используем внешний UDF‑фид (стандартный протокол TradingView UDF)
+    // Базовый URL: http://127.0.0.1:80  → библиотека сама будет дергать /symbols, /history и т.д.
+    const datafeed = new Datafeeds.UDFCompatibleDatafeed('http://127.0.0.1:80');
+    console.log(`📊 [initTradingView] Using external UDF datafeed for pair ${pairId}`);
 
     // Переменная для хранения broker (будет установлена в broker_factory)
     let brokerInstance = null;
@@ -130,8 +131,9 @@ function initTradingView(pairId = 1, containerElement = null) {
     const tvWidget = new TradingView.widget({
         library_path: 'https://trading-terminal.tradingview-widget.com/charting_library/',
         fullscreen: false,
-        symbol: 'AAPL', // Стандартный символ для демо datafeed
-        interval: '1D',
+        // Стартовый символ — будет сразу же переустановлен в updateTradingViewPair
+        symbol: 'BTCUSDT',
+        interval: '60',
         container: containerId,
         datafeed: datafeed,
         locale: 'en',
@@ -317,46 +319,45 @@ function updateTradingViewPair(pairId) {
 
     // Для демо datafeed используем стандартные символы TradingView
     // Не нужно обновлять символ, так как демо datafeed работает с фиксированными символами
-    const updateSymbol = () => {
-        // Для демо datafeed используем стандартные символы
-        const demoSymbols = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'AMZN'];
-        const symbolIndex = (pairId - 1) % demoSymbols.length;
-        const testSymbol = demoSymbols[symbolIndex];
-        
-        console.log(`📊 [updateSymbol] Using demo symbol ${testSymbol} for pair ${pairId}`);
-        
+    const updateSymbol = async () => {
         if (!tvWidget) {
             console.warn('Widget not available for symbol update');
             return;
         }
-        
-        // Используем onChartReady для гарантии готовности виджета
+
+        // Получаем актуальный символ пары с бэкенда (ожидается такой же тикер, как в UDF)
+        let targetSymbol = 'BTCUSDT';
         try {
-            // Пытаемся сразу изменить символ, если виджет готов
-            const chart = tvWidget.chart();
-            if (chart && typeof chart === 'function') {
-                const chartInstance = chart();
-                if (chartInstance && chartInstance.tradingViewApi) {
-                    tvWidget.setSymbol(testSymbol, '1D', () => {
-                        console.log(`✅ Symbol changed to ${testSymbol} (demo datafeed)`);
-                    });
-                    return;
-                }
+            const resp = await fetch(`${window.API_BASE}/pairs`);
+            const pairs = await resp.json();
+            const pair = pairs.find(p => p.id === pairId);
+            if (pair && pair.symbol) {
+                targetSymbol = pair.symbol;
             }
-        } catch (error) {
-            // Игнорируем ошибки при проверке
+        } catch (e) {
+            console.warn('⚠️ Cannot load pairs for symbol update, fallback to BTCUSDT', e);
         }
-        
-        // Если виджет не готов, используем onChartReady
-        tvWidget.onChartReady(() => {
-            try {
-                tvWidget.setSymbol(testSymbol, '1D', () => {
-                    console.log(`✅ Symbol changed to ${testSymbol} (onChartReady)`);
-                });
-            } catch (error) {
-                console.warn('Error changing symbol in onChartReady:', error);
-            }
-        });
+
+        console.log(`📊 [updateSymbol] Setting symbol ${targetSymbol} for pair ${pairId}`);
+
+        const setSym = () => {
+            tvWidget.setSymbol(targetSymbol, '60', () => {
+                console.log(`✅ Symbol changed to ${targetSymbol}`);
+            });
+        };
+
+        // Меняем символ, когда виджет готов
+        try {
+            tvWidget.onChartReady(() => {
+                try {
+                    setSym();
+                } catch (err) {
+                    console.warn('Error changing symbol in onChartReady:', err);
+                }
+            });
+        } catch (error) {
+            console.warn('Error scheduling symbol change:', error);
+        }
     };
 
     // Проверяем, готов ли виджет

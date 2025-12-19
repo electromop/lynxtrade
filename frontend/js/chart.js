@@ -15,6 +15,7 @@ let chartDataCache = new Map(); // pairId -> [candles]
 let lastCandleTime = new Map(); // pairId -> timestamp
 let currentCandleData = new Map(); // pairId -> candle data
 let priceUpdateIntervals = new Map(); // pairId -> intervalId
+let candleAnimations = new Map(); // pairId -> { frameId, targetPrice, startPrice, startTime }
 
 // Хранилище для линий ордеров
 let orderLines = new Map(); // pairId -> Map(orderId -> { line, rect })
@@ -442,14 +443,10 @@ function initChart(pairId = 1, containerElement = null) {
         const innerWrap = document.createElement('div');
         innerWrap.className = 'innerWrap-OhqNVIYA';
         
-        // Функция для создания разделителя
+        // Функция для создания разделителя (отключена)
         function createSeparator() {
-            const separatorWrap = document.createElement('div');
-            separatorWrap.className = 'separatorWrap-MBOVGQRI';
-            const separator = document.createElement('div');
-            separator.className = 'separator-xVhBjD5m separator-MBOVGQRI';
-            separatorWrap.appendChild(separator);
-            return separatorWrap;
+            // Разделители скрыты через CSS
+            return null;
         }
         
         // Функция для создания группы
@@ -481,8 +478,8 @@ function initChart(pairId = 1, containerElement = null) {
         intervalsGroup.appendChild(intervalsWrap);
         innerWrap.appendChild(intervalsGroup);
         
-        // Разделитель
-        innerWrap.appendChild(createSeparator());
+        // Разделитель (отключен)
+        // innerWrap.appendChild(createSeparator());
         
         // Группа 2: Стили графика
         const chartStylesGroup = createGroup();
@@ -506,8 +503,8 @@ function initChart(pairId = 1, containerElement = null) {
         chartStylesGroup.appendChild(chartStylesWrap);
         innerWrap.appendChild(chartStylesGroup);
         
-        // Разделитель
-        innerWrap.appendChild(createSeparator());
+        // Разделитель (отключен)
+        // innerWrap.appendChild(createSeparator());
         
         // Группа 3: Индикаторы
         const indicatorsGroup = createGroup();
@@ -533,8 +530,8 @@ function initChart(pairId = 1, containerElement = null) {
         indicatorsGroup.appendChild(indicatorsWrap);
         innerWrap.appendChild(indicatorsGroup);
         
-        // Разделитель
-        innerWrap.appendChild(createSeparator());
+        // Разделитель (отключен)
+        // innerWrap.appendChild(createSeparator());
         
         // Группа 4: Undo/Redo
         const undoRedoGroup = createGroup();
@@ -575,8 +572,8 @@ function initChart(pairId = 1, containerElement = null) {
         fillGroup.className = 'fill-OhqNVIYA group-MBOVGQRI';
         innerWrap.appendChild(fillGroup);
         
-        // Разделитель
-        innerWrap.appendChild(createSeparator());
+        // Разделитель (отключен)
+        // innerWrap.appendChild(createSeparator());
         
         // Группа 5: Поиск, настройки, скриншот
         const toolsGroup = createGroup();
@@ -644,7 +641,7 @@ function initChart(pairId = 1, containerElement = null) {
     chartHeader.className = 'chart-header';
     chartHeader.id = `chart-header-${pairId}`;
     chartHeader.style.cssText = `
-        height: 50px;
+        height: 25px;
         background: transparent;
         border-bottom: 0;
         display: flex;
@@ -667,6 +664,7 @@ function initChart(pairId = 1, containerElement = null) {
     candleInfoDiv.id = `candleInfo-${pairId}`;
     candleInfoDiv.textContent = 'O 0.00000 H 0.00000 L 0.00000 C 0.00000 +0.0000 (+0.00%)';
     candleInfoDiv.style.pointerEvents = 'auto';
+    candleInfoDiv.style.fontFamily = 'Arial';
     
     chartHeader.appendChild(candleInfoDiv);
     
@@ -711,8 +709,10 @@ function initChart(pairId = 1, containerElement = null) {
         
         // Проверяем размеры контейнера
         if (chartCanvasContainer.clientWidth === 0 || chartCanvasContainer.clientHeight === 0) {
-            console.warn('Chart container has zero dimensions, waiting for layout...');
-            setTimeout(() => initChart(pairId, containerElement), 100);
+            console.warn('Chart container has zero dimensions, skip init for now (will re-init on next switchToPair/loadPairs)...');
+            // Не запускаем рекурсивный setTimeout, чтобы не спамить лог и не плодить таймеры.
+            // График для этой пары будет инициализирован повторно из switchToPair/loadPairs,
+            // когда контейнер будет иметь валидные размеры.
             return;
         }
         
@@ -732,11 +732,13 @@ function initChart(pairId = 1, containerElement = null) {
                     color: '#393b3f',
                     width: 1,
                     style: LightweightCharts.LineStyle.Solid,
+                    labelVisible: false,
                 },
                 horzLine: {
                     color: '#393b3f',
                     width: 1,
                     style: LightweightCharts.LineStyle.Solid,
+                    labelVisible: false,
                 },
             },
             rightPriceScale: {
@@ -765,21 +767,21 @@ function initChart(pairId = 1, containerElement = null) {
         let candlestickSeries;
         if (typeof chart.addCandlestickSeries === 'function') {
             // Версия 4.x
-        candlestickSeries = chart.addCandlestickSeries({
-            upColor: '#22c55e',
-            downColor: '#ef4444',
-            borderVisible: false,
-            wickUpColor: '#22c55e',
-            wickDownColor: '#ef4444',
-        });
+            candlestickSeries = chart.addCandlestickSeries({
+                upColor: '#08b774',
+                downColor: '#f92757',
+                borderVisible: false,
+                wickUpColor: '#08b774',
+                wickDownColor: '#f92757',
+            });
         } else if (typeof chart.addSeries === 'function' && LightweightCharts.CandlestickSeries) {
             // Версия 5.x+
             candlestickSeries = chart.addSeries(LightweightCharts.CandlestickSeries, {
-                upColor: '#22c55e',
-                downColor: '#ef4444',
+                upColor: '#08b774',
+                downColor: '#f92757',
                 borderVisible: false,
-                wickUpColor: '#22c55e',
-                wickDownColor: '#ef4444',
+                wickUpColor: '#08b774',
+                wickDownColor: '#f92757',
             });
         } else {
             console.error('Cannot create candlestick series - API not supported');
@@ -826,9 +828,11 @@ function initChart(pairId = 1, containerElement = null) {
         console.log(`✅ Chart initialized for pair ${pairId}`);
         
         // Загружаем данные
+        console.log(`📊 Loading chart data for pair ${pairId}, timeframe: ${currentTimeframe}`);
         loadChartData(pairId, currentTimeframe);
         
         // Запускаем обновление цен
+        console.log(`💰 Starting price updates for pair ${pairId}`);
         startPriceUpdates(pairId);
         
     } catch (error) {
@@ -862,44 +866,77 @@ async function loadChartData(pairId, timeframe) {
     currentTimeframe = timeframe;
     
     try {
-        const response = await fetch(`${window.API_BASE}/chart-data/${pairId}?timeframe=${timeframe}&limit=100`);
-        const candles = await response.json();
+        const url = `${window.API_BASE}/chart-data/${pairId}?timeframe=${timeframe}&limit=100`;
+        console.log(`📊 Fetching chart data from: ${url}`);
+        const response = await fetch(url);
         
-        const formattedData = candles.map(candle => ({
-            time: candle.time,
-            open: candle.open,
-            high: candle.high,
-            low: candle.low,
-            close: candle.close,
-        }));
+        if (!response.ok) {
+            console.error(`❌ Error fetching chart data: ${response.status} ${response.statusText}`);
+            return;
+        }
+        
+        const candles = await response.json();
+        console.log(`📊 Received ${candles.length} candles for pair ${pairId}`);
+        
+        if (candles.length > 0) {
+            console.log(`📊 First candle from server: time=${candles[0].time}, last candle: time=${candles[candles.length - 1].time}`);
+        }
+        
+        // ВАЖНО: свечи из Binance приходят в UTC, нужно конвертировать в UTC-3
+        const UTC_OFFSET_SECONDS = 3 * 3600; // 3 часа в секундах
+        
+        const formattedData = candles.map((candle) => {
+            // Убеждаемся, что время - это число (Unix timestamp в секундах)
+            let time = candle.time;
+            if (typeof time !== 'number') {
+                time = parseInt(time, 10);
+            }
+            if (isNaN(time)) {
+                return null;
+            }
+            
+            // Вычитаем 3 часа из времени свечи, чтобы конвертировать из UTC в UTC-3
+            time = time - UTC_OFFSET_SECONDS;
+            
+            return {
+                time: time,
+                open: parseFloat(candle.open) || 0,
+                high: parseFloat(candle.high) || 0,
+                low: parseFloat(candle.low) || 0,
+                close: parseFloat(candle.close) || 0,
+            };
+        }).filter(candle => candle !== null);
+        
+        if (formattedData.length > 0) {
+            console.log(`📊 After conversion to UTC-3: first time=${formattedData[0].time}, last time=${formattedData[formattedData.length - 1].time}`);
+        }
         
         // Валидация и фильтрация данных
         const validatedData = validateCandleData(formattedData);
         const sortedAndDeduped = sortAndDeduplicateCandles(validatedData);
         
-        // Удаляем последнюю свечу, если она в будущем
-        let dataToSet = sortedAndDeduped;
-        if (dataToSet.length > 0) {
-            const now = window.getServerTimeUTC ? window.getServerTimeUTC() : Math.floor(Date.now() / 1000);
-        const timeframeSeconds = {
-            '1m': 60,
-            '5m': 300,
-            '15m': 900,
-            '1h': 3600
-        };
-            const interval = timeframeSeconds[timeframe] || 60;
-        const currentCandleTime = Math.floor(now / interval) * interval;
-            const lastCandle = dataToSet[dataToSet.length - 1];
-            if (lastCandle.time > currentCandleTime) {
-                dataToSet = dataToSet.slice(0, -1);
-            }
-        }
+        // Используем все свечи как есть (уже конвертированы в UTC-3)
+        const dataToSet = sortedAndDeduped;
         
+        console.log(`📊 Setting ${dataToSet.length} candles to chart for pair ${pairId}`);
+        if (dataToSet.length > 0) {
+            console.log(`📊 Last candle time in dataToSet: ${dataToSet[dataToSet.length - 1].time}`);
+        }
         chartData.candlestickSeries.setData(dataToSet);
         chartDataCache.set(pairId, [...dataToSet]);
         
+        // Устанавливаем lastCandleTime на время последней свечи
+        if (dataToSet.length > 0) {
+            const lastCandle = dataToSet[dataToSet.length - 1];
+            if (typeof lastCandle.time === 'number') {
+                lastCandleTime.set(pairId, lastCandle.time);
+                currentCandleData.set(pairId, {...lastCandle});
+                console.log(`📊 Set lastCandleTime to: ${lastCandle.time} for pair ${pairId}`);
+            }
+        }
+        
     } catch (error) {
-        console.error('Error loading chart data:', error);
+        console.error('❌ Error loading chart data:', error);
     }
 }
 
@@ -961,94 +998,281 @@ function startPriceUpdates(pairId) {
     
     const interval = setInterval(async () => {
         try {
-            const response = await fetch(`${window.API_BASE}/price/${pairId}`);
-            const data = await response.json();
+            const url = `${window.API_BASE}/price/${pairId}`;
+            const response = await fetch(url);
             
-            if (data && data.price) {
-                updateLastCandle(pairId, data.price, data.timestamp);
+            if (!response.ok) {
+                console.error(`❌ Error fetching price: ${response.status} ${response.statusText}`);
+                return;
+            }
+            
+            const data = await response.json();
+            console.log(`💰 Price update for pair ${pairId}:`, data);
+            
+            if (data && typeof data.price === 'number') {
+                updateLastCandle(pairId, data.price);
+            } else {
+                console.warn(`⚠️ No valid price data received for pair ${pairId}:`, data);
             }
         } catch (error) {
-            console.error('Error fetching price:', error);
+            console.error('❌ Error fetching price:', error);
         }
     }, 2000);
+    
+    console.log(`💰 Price update interval started for pair ${pairId}`);
     
     priceUpdateIntervals.set(pairId, interval);
 }
 
-function updateLastCandle(pairId, price, timestamp) {
+// Простая логика обновления свечи, как в примере Lightweight Charts:
+// Обновление последней свечи по паттерну Lightweight Charts
+// setData() вызывается один раз при загрузке, потом только update()
+function updateLastCandle(pairId, price) {
     const chartData = charts.get(pairId);
     if (!chartData || !chartData.candlestickSeries) {
+        console.warn(`⚠️ [updateLastCandle] Chart not found for pair ${pairId}`);
         return;
     }
     
     if (typeof price !== 'number' || isNaN(price)) {
+        console.warn(`⚠️ [updateLastCandle] Invalid price for pair ${pairId}: ${price}`);
         return;
     }
     
-    const now = timestamp ? Math.floor(timestamp) : (window.getServerTimeUTC ? window.getServerTimeUTC() : Math.floor(Date.now() / 1000));
     const timeframeSeconds = {
         '1m': 60,
         '5m': 300,
         '15m': 900,
-        '1h': 3600
+        '1h': 3600,
     };
     const interval = timeframeSeconds[currentTimeframe] || 60;
-    const currentCandleTime = Math.floor(now / interval) * interval;
     
-    const lastTime = lastCandleTime.get(pairId);
-    const currentData = currentCandleData.get(pairId);
+    // Получаем серверное время в UTC-3
+    let nowSec = window.getServerTimeUTC ? window.getServerTimeUTC() : null;
+    if (nowSec === null || nowSec === undefined) {
+        const localNow = Math.floor(Date.now() / 1000);
+        nowSec = localNow - (6 * 3600); // UTC+3 -> UTC-3
+    }
     
-    if (lastTime === null || lastTime === undefined || lastTime < currentCandleTime) {
-        // Новая свеча
-        lastCandleTime.set(pairId, currentCandleTime);
-        const newCandle = {
-            time: currentCandleTime,
+    if (typeof nowSec !== 'number' || isNaN(nowSec)) {
+        console.warn(`⚠️ [updateLastCandle] Invalid nowSec for pair ${pairId}: ${nowSec}`);
+        return;
+    }
+    
+    nowSec = Math.floor(nowSec);
+    const candleTime = Math.floor(nowSec / interval) * interval;
+    
+    let cache = chartDataCache.get(pairId) || [];
+    const last = cache.length > 0 ? cache[cache.length - 1] : null;
+    
+    // Функция для сравнения времени по часам и минутам (игнорируя секунды и часовой пояс)
+    // Извлекаем часы и минуты из timestamp для сравнения
+    const getTimeKey = (timestamp) => {
+        const date = new Date(timestamp * 1000);
+        // Используем UTC для консистентности (независимо от часового пояса)
+        const year = date.getUTCFullYear();
+        const month = date.getUTCMonth();
+        const day = date.getUTCDate();
+        const hour = date.getUTCHours();
+        const minute = date.getUTCMinutes();
+        // Для 1m таймфрейма сравниваем по минутам
+        if (interval === 60) {
+            return `${year}-${month}-${day}-${hour}-${minute}`;
+        }
+        // Для других таймфреймов используем соответствующий интервал
+        return Math.floor(timestamp / interval);
+    };
+    
+    if (last) {
+        const candleTimeKey = getTimeKey(candleTime);
+        const lastTimeKey = getTimeKey(last.time);
+        console.log(`🕯️ [updateLastCandle] DEBUG: nowSec=${nowSec}, candleTime=${candleTime} (key=${candleTimeKey}), last.time=${last.time} (key=${lastTimeKey}), cache.length=${cache.length}`);
+    }
+    
+    // Если нет истории - создаем первую свечу
+    if (!last) {
+        const firstBar = {
+            time: candleTime,
             open: price,
             high: price,
             low: price,
-            close: price
+            close: price,
         };
-        currentCandleData.set(pairId, newCandle);
+        cache = [firstBar];
+        chartDataCache.set(pairId, cache);
+        chartData.candlestickSeries.setData(cache);
+        lastCandleTime.set(pairId, candleTime);
+        currentCandleData.set(pairId, {...firstBar});
+        console.log(`🕯️ [updateLastCandle] Created first candle: time=${candleTime}, price=${price}`);
+        return;
+    }
+    
+    // Сравниваем по часам и минутам, а не по точным секундам
+    // Нормализуем оба времени к UTC-3 для сравнения
+    const UTC_OFFSET_SECONDS = 3 * 3600;
+    let normalizedLastTime = last.time;
+    // Если last.time больше candleTime на ~3 часа (10800 секунд), значит оно в UTC
+    // Нормализуем к UTC-3 для сравнения
+    if (last.time > candleTime && Math.abs(last.time - candleTime - UTC_OFFSET_SECONDS) < 300) {
+        normalizedLastTime = last.time - UTC_OFFSET_SECONDS;
+    }
+    
+    const candleTimeKey = getTimeKey(candleTime);
+    const lastTimeKey = getTimeKey(normalizedLastTime);
+    
+    // Если разница меньше интервала - считаем это одной свечой (учет расхождений в секундах)
+    const isSameTime = candleTimeKey === lastTimeKey;
+    const timeDiff = Math.abs(candleTime - normalizedLastTime);
+    
+    // Логирование для отладки
+    if (last) {
+        console.log(`🕯️ [updateLastCandle] Keys comparison: candleTimeKey="${candleTimeKey}", lastTimeKey="${lastTimeKey}", isSameTime=${isSameTime}, candleTimeKey > lastTimeKey=${candleTimeKey > lastTimeKey}, candleTime=${candleTime}, normalizedLastTime=${normalizedLastTime}, timeDiff=${timeDiff}`);
+    }
+    
+    // Если новая свеча (время больше последнего)
+    // Используем числовое сравнение нормализованного времени
+    if (candleTime > normalizedLastTime) {
+        // Используем время последней свечи из графика для новой свечи
+        // Если в графике последняя свеча имеет время больше candleTime, используем его + интервал
+        const currentCandle = currentCandleData.get(pairId);
+        let newCandleTime = candleTime;
         
-        // Обновляем кэш
-        const cache = chartDataCache.get(pairId) || [];
-        const existingIndex = cache.findIndex(c => c.time === currentCandleTime);
-        if (existingIndex !== -1) {
-            cache[existingIndex] = {...newCandle};
-        } else {
-            cache.push({...newCandle});
+        if (currentCandle && typeof currentCandle.time === 'number' && !isNaN(currentCandle.time)) {
+            // Если время последней свечи в графике больше candleTime, используем его + интервал
+            if (currentCandle.time > candleTime) {
+                newCandleTime = currentCandle.time + interval;
+            }
+        } else if (last.time > candleTime) {
+            // Если last.time больше candleTime, используем его + интервал
+            newCandleTime = last.time + interval;
         }
         
-        const validated = validateCandleData(cache);
-        const sorted = sortAndDeduplicateCandles(validated);
-        chartData.candlestickSeries.setData(sorted);
-        chartDataCache.set(pairId, sorted);
+        // createCandle - создаем новую свечу (как в примере)
+        const newBar = {
+            time: newCandleTime,
+            open: price,
+            high: price,
+            low: price,
+            close: price,
+        };
         
-    } else if (lastTime === currentCandleTime) {
-        // Обновляем существующую свечу
-        if (!currentData) {
-            currentCandleData.set(pairId, {
-                time: currentCandleTime,
-                open: price,
-                high: price,
-                low: price,
-                close: price
-            });
-        } else {
-            currentData.high = Math.max(currentData.high, price);
-            currentData.low = Math.min(currentData.low, price);
-            currentData.close = price;
+        cache.push(newBar);
+        
+        // Ограничиваем размер кэша
+        const maxCacheSize = 2000;
+        if (cache.length > maxCacheSize) {
+            cache = cache.slice(-maxCacheSize);
+        }
+        chartDataCache.set(pairId, cache);
+        
+        // Используем update для новой свечи (как в примере)
+        chartData.candlestickSeries.update(newBar);
+        lastCandleTime.set(pairId, newCandleTime);
+        currentCandleData.set(pairId, {...newBar});
+        console.log(`🕯️ [updateLastCandle] NEW CANDLE: time=${newCandleTime}, candleTime=${candleTime}, last.time=${last.time}, normalizedLastTime=${normalizedLastTime}, price=${price}`);
+        return;
+    }
+    
+    // Если та же свеча (время меньше или равно последнему) - обновляем её
+    if (candleTime <= normalizedLastTime) {
+        // updateCandle - обновляем существующую свечу (как в примере)
+        if (!last || typeof last.time !== 'number' || isNaN(last.time)) {
+            console.error(`❌ [updateLastCandle] Invalid last candle:`, last);
+            return;
         }
         
-        chartData.candlestickSeries.update(currentCandleData.get(pairId));
+        // Используем время из currentCandleData, которое соответствует последней свече в графике
+        const currentCandle = currentCandleData.get(pairId);
+        const updateTime = currentCandle && typeof currentCandle.time === 'number' && !isNaN(currentCandle.time) 
+            ? currentCandle.time 
+            : last.time;
         
-                // Обновляем кэш
-        const cache = chartDataCache.get(pairId) || [];
-        const lastIndex = cache.length - 1;
-        if (lastIndex >= 0 && cache[lastIndex].time === currentCandleTime) {
-            cache[lastIndex] = {...currentCandleData.get(pairId)};
+        const updatedBar = {
+            time: updateTime, // Используем время последней свечи из графика
+            open: last.open,
+            high: Math.max(last.high, price),
+            low: Math.min(last.low, price),
+            close: price,
+        };
+        
+        // Обновляем последнюю свечу в кэше
+        cache[cache.length - 1] = updatedBar;
+        chartDataCache.set(pairId, cache);
+        
+        // Плавная анимация изменения свечи
+        animateCandleUpdate(pairId, chartData, last, updatedBar, updateTime);
+        
+        lastCandleTime.set(pairId, updateTime);
+        currentCandleData.set(pairId, {...updatedBar});
+        console.log(`🕯️ [updateLastCandle] UPDATED: time=${updateTime}, price=${price}, high=${updatedBar.high}, low=${updatedBar.low}`);
+        return;
+    }
+    
+    // Если время откатилось назад - игнорируем
+    console.warn(`⚠️ [updateLastCandle] Time went backwards: candleTime=${candleTime} (key=${candleTimeKey}), last.time=${last.time} (key=${lastTimeKey}), diff=${timeDiff}`);
+}
+
+function animateCandleUpdate(pairId, chartData, lastCandle, targetBar, updateTime) {
+    // Останавливаем предыдущую анимацию для этой пары
+    if (candleAnimations.has(pairId)) {
+        const anim = candleAnimations.get(pairId);
+        if (anim.frameId) {
+            cancelAnimationFrame(anim.frameId);
         }
     }
+    
+    const startPrice = lastCandle.close;
+    const targetPrice = targetBar.close;
+    const startHigh = lastCandle.high;
+    const startLow = lastCandle.low;
+    const targetHigh = targetBar.high;
+    const targetLow = targetBar.low;
+    
+    // Если цена не изменилась, просто обновляем без анимации
+    if (Math.abs(startPrice - targetPrice) < 0.01) {
+        chartData.candlestickSeries.update(targetBar);
+        return;
+    }
+    
+    const startTime = performance.now();
+    const duration = 300; // 300ms для плавной анимации
+    
+    const animate = (currentTime) => {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Используем easing функцию для плавности
+        const easeOutCubic = 1 - Math.pow(1 - progress, 3);
+        
+        // Интерполируем значения
+        const currentPrice = startPrice + (targetPrice - startPrice) * easeOutCubic;
+        const currentHigh = startHigh + (targetHigh - startHigh) * easeOutCubic;
+        const currentLow = startLow + (targetLow - startLow) * easeOutCubic;
+        
+        // Создаем промежуточную свечу
+        const animatedBar = {
+            time: updateTime,
+            open: lastCandle.open,
+            high: Math.max(currentHigh, currentPrice),
+            low: Math.min(currentLow, currentPrice),
+            close: currentPrice,
+        };
+        
+        // Обновляем график
+        chartData.candlestickSeries.update(animatedBar);
+        
+        if (progress < 1) {
+            const frameId = requestAnimationFrame(animate);
+            candleAnimations.set(pairId, { frameId, targetPrice, startPrice, startTime });
+        } else {
+            // Анимация завершена, устанавливаем финальные значения
+            chartData.candlestickSeries.update(targetBar);
+            candleAnimations.delete(pairId);
+        }
+    };
+    
+    const frameId = requestAnimationFrame(animate);
+    candleAnimations.set(pairId, { frameId, targetPrice, startPrice, startTime });
 }
 
 function updateChart(pairId, timeframe) {
@@ -1057,13 +1281,24 @@ function updateChart(pairId, timeframe) {
     lastCandleTime.set(pairId, null);
     currentCandleData.set(pairId, null);
     
+    // Останавливаем анимацию при смене графика
+    if (candleAnimations.has(pairId)) {
+        const anim = candleAnimations.get(pairId);
+        if (anim.frameId) {
+            cancelAnimationFrame(anim.frameId);
+        }
+        candleAnimations.delete(pairId);
+    }
+    
     loadChartData(pairId, timeframe);
 }
 
 // Функция для рисования линии ордера
-function drawOrderLine(pairId, price, orderId, side = 'BUY', orderTime = null, endTime = null) {
+// amount - сумма, на которую покупаем (для отображения в прямоугольнике)
+function drawOrderLine(pairId, price, orderId, side = 'BUY', orderTime = null, endTime = null, amount = null) {
     const chartData = charts.get(pairId);
-    if (!chartData || !chartData.chart) {
+    // Для Lightweight Charts прайсовые линии создаются на серии, а не на всём графике
+    if (!chartData || !chartData.candlestickSeries) {
         return;
     }
     
@@ -1072,39 +1307,282 @@ function drawOrderLine(pairId, price, orderId, side = 'BUY', orderTime = null, e
     }
     
     const lineTime = orderTime || Math.floor(Date.now() / 1000);
-    const lineColor = side === 'BUY' ? '#22c55e' : '#ef4444';
+    const isBuy = side === 'BUY';
+    const lineColor = isBuy ? '#22c55e' : '#ef4444';
     
-    // Создаем горизонтальную линию
-    const line = chartData.chart.addPriceLine({
+    // Создаем горизонтальную линию на серии свечей
+    const line = chartData.candlestickSeries.createPriceLine({
         price: price,
         color: lineColor,
-        lineWidth: 2,
+        lineWidth: 1, // в 2 раза тоньше, чем было
         lineStyle: LightweightCharts.LineStyle.Solid,
-        axisLabelVisible: true,
-        title: `${side} ${price.toFixed(2)}`,
+        axisLabelVisible: false, // Убираем метку цены на оси
+        // Без текста BUY/SELL на оси
+        title: '',
     });
     
-    // Сохраняем линию
-    if (!chartData.orderLines) {
-        chartData.orderLines = new Map();
+    // HTML-прямоугольник с таймером и суммой, как на скрине
+    const containerEl = chartData.chartCanvasContainer || chartData.container;
+    if (containerEl) {
+        // Удаляем старый прямоугольник/таймер для этого ордера, если есть
+        if (!chartData.orderLines) {
+            chartData.orderLines = new Map();
+        }
+        const existing = chartData.orderLines.get(orderId);
+        if (existing) {
+            if (existing.labelEl && existing.labelEl.parentNode) {
+                existing.labelEl.parentNode.removeChild(existing.labelEl);
+            }
+            if (existing.intervalId) {
+                clearInterval(existing.intervalId);
+            }
+        }
+        
+        const labelEl = document.createElement('div');
+        labelEl.className = 'lc-order-label';
+        labelEl.style.position = 'absolute';
+        // Прямоугольник со смещением на 30px в другую сторону от правого края графика
+        labelEl.style.right = '100px';
+        labelEl.style.transform = 'translateY(-50%)';
+        labelEl.style.display = 'flex';
+        // Базовый шрифт Arial
+        labelEl.style.fontFamily = "Arial, Helvetica, sans-serif";
+        labelEl.style.fontSize = '12px';
+        // Остроугольный прямоугольник
+        labelEl.style.borderRadius = '0px';
+        labelEl.style.overflow = 'hidden';
+        labelEl.style.zIndex = '3';
+        
+        // Блок времени
+        const timeEl = document.createElement('div');
+        timeEl.className = 'lc-order-label-time';
+        timeEl.style.padding = '2px 6px';
+        timeEl.style.backgroundColor = '#ffffff';
+        timeEl.style.color = isBuy ? '#22c55e' : '#ef4444';
+        timeEl.style.fontWeight = '600';
+        timeEl.textContent = '00:00';
+        
+        // Блок суммы: показываем сумму сделки, а не цену входа
+        const amountEl = document.createElement('div');
+        amountEl.className = 'lc-order-label-amount';
+        amountEl.style.padding = '2px 8px';
+        amountEl.style.backgroundColor = isBuy ? '#22c55e' : '#ef4444';
+        amountEl.style.color = '#ffffff';
+        amountEl.style.fontWeight = '600';
+        const displayAmount = (amount != null && !isNaN(amount)) ? amount : price;
+        amountEl.textContent = displayAmount.toFixed(2);
+        
+        labelEl.appendChild(timeEl);
+        labelEl.appendChild(amountEl);
+        containerEl.appendChild(labelEl);
+        
+        // Позиционируем по цене
+        const positionLabel = () => {
+            if (!chartData.candlestickSeries || !labelEl.parentNode) return;
+            const y = chartData.candlestickSeries.priceToCoordinate(price);
+            if (y == null) return;
+            labelEl.style.top = `${y}px`;
+        };
+        positionLabel();
+        
+        // Обновляем позицию при возможных изменениях масштаба
+        if (chartData.chart && chartData.chart.timeScale) {
+            const ts = chartData.chart.timeScale();
+            if (ts && typeof ts.subscribeVisibleTimeRangeChange === 'function') {
+                ts.subscribeVisibleTimeRangeChange(() => {
+                    positionLabel();
+                });
+            }
+
+            // Поддержка разных версий lightweight-charts:
+            // subscribePriceScaleChange может отсутствовать — проверяем перед вызовом
+            if (typeof chartData.chart.priceScale === 'function') {
+                const rightScale = chartData.chart.priceScale('right');
+                if (rightScale && typeof rightScale.subscribePriceScaleChange === 'function') {
+                    rightScale.subscribePriceScaleChange(() => {
+                        positionLabel();
+                    });
+                }
+            }
+        }
+        
+        // Обратный отсчёт до endTime, если он есть
+        let intervalId = null;
+        if (endTime) {
+            // Преобразуем endTime в Unix timestamp (секунды), если это строка
+            let endTimeSec = endTime;
+            if (typeof endTime === 'string') {
+                endTimeSec = Math.floor(new Date(endTime).getTime() / 1000);
+            } else if (typeof endTime === 'number' && endTime > 1e10) {
+                // Если это миллисекунды, конвертируем в секунды
+                endTimeSec = Math.floor(endTime / 1000);
+            }
+            
+            const updateCountdown = () => {
+                // ВСЕГДА используем серверное время для расчета
+                const nowSec = window.getServerTimeUTC();
+                
+                // Проверяем, что nowSec валидное число
+                if (isNaN(nowSec)) {
+                    timeEl.textContent = '00:00';
+                    return;
+                }
+                
+                // Вычисляем время до полной минуты (секунды до следующей минуты)
+                const secondsInCurrentMinute = nowSec % 60;
+                const remaining = 60 - secondsInCurrentMinute;
+                const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+                const ss = String(remaining % 60).padStart(2, '0');
+                timeEl.textContent = `${mm}:${ss}`;
+                
+                // Меняем цвет прямоугольника в зависимости от оставшегося времени
+                // ≤10 секунд - красный, >10 секунд - зеленый
+                const newColor = remaining <= 10 ? '#ef4444' : '#22c55e';
+                const amountEl = labelEl.querySelector('.lc-order-label-amount');
+                if (amountEl) {
+                    amountEl.style.backgroundColor = newColor;
+                }
+                timeEl.style.color = newColor;
+            };
+            updateCountdown();
+            intervalId = setInterval(updateCountdown, 1000);
+        }
+        
+        // Сохраняем линию и DOM-элемент (всегда используем строку для orderId для консистентности)
+        const orderIdStr = String(orderId);
+        chartData.orderLines.set(orderIdStr, { line, price, side, endTime, labelEl, intervalId });
+    } else {
+        if (!chartData.orderLines) {
+            chartData.orderLines = new Map();
+        }
+        // Всегда используем строку для orderId
+        const orderIdStr = String(orderId);
+        chartData.orderLines.set(orderIdStr, { line, price, side, endTime });
     }
-    chartData.orderLines.set(orderId, { line, price, side, endTime });
     
     console.log(`✅ Order line drawn for order ${orderId} at price ${price}`);
 }
 
-// Функция для удаления линии ордера
-function removeOrderLine(pairId, orderId) {
+// Функция для обновления цвета линии ордера в зависимости от оставшегося времени
+function updateOrderLineColor(pairId, orderId, remainingSeconds) {
     const chartData = charts.get(pairId);
     if (!chartData || !chartData.orderLines) {
         return;
     }
     
-    const orderLine = chartData.orderLines.get(orderId);
-    if (orderLine && orderLine.line) {
-        chartData.chart.removePriceLine(orderLine.line);
-        chartData.orderLines.delete(orderId);
-        console.log(`✅ Order line removed for order ${orderId}`);
+    // Всегда используем строковый формат для поиска
+    const orderIdStr = String(orderId);
+    let orderLine = chartData.orderLines.get(orderIdStr);
+    
+    // Если не найдено, пробуем другие форматы
+    if (!orderLine) {
+        if (typeof orderId === 'number') {
+            orderLine = chartData.orderLines.get(orderId);
+        } else {
+            const numericId = parseInt(orderId, 10);
+            if (!isNaN(numericId)) {
+                orderLine = chartData.orderLines.get(numericId);
+            }
+        }
+    }
+    
+    if (!orderLine || !orderLine.line || !chartData.candlestickSeries) {
+        return;
+    }
+    
+    // Определяем цвет: ≤10 секунд - красный, >10 секунд - зеленый
+    const newColor = remainingSeconds <= 10 ? '#ef4444' : '#22c55e';
+    
+    // В Lightweight Charts нельзя изменить цвет существующей линии,
+    // поэтому удаляем старую и создаем новую с правильным цветом
+    const price = orderLine.price;
+    const side = orderLine.side;
+    
+    // Удаляем старую линию
+    chartData.candlestickSeries.removePriceLine(orderLine.line);
+    
+    // Создаем новую линию с правильным цветом
+    const newLine = chartData.candlestickSeries.createPriceLine({
+        price: price,
+        color: newColor,
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Solid,
+        axisLabelVisible: false,
+        title: '',
+    });
+    
+    // Обновляем ссылку на линию
+    orderLine.line = newLine;
+    
+    // Обновляем цвет прямоугольника (если есть)
+    if (orderLine.labelEl) {
+        const amountEl = orderLine.labelEl.querySelector('.lc-order-label-amount');
+        if (amountEl) {
+            amountEl.style.backgroundColor = newColor;
+        }
+        const timeEl = orderLine.labelEl.querySelector('.lc-order-label-time');
+        if (timeEl) {
+            timeEl.style.color = newColor;
+        }
+    }
+}
+
+// Функция для удаления линии ордера
+function removeOrderLine(pairId, orderId) {
+    console.log(`🗑️ [removeOrderLine] Called for pair ${pairId}, orderId=${orderId} (type: ${typeof orderId})`);
+    
+    const chartData = charts.get(pairId);
+    if (!chartData) {
+        console.warn(`⚠️ [removeOrderLine] Chart data not found for pair ${pairId}`);
+        return;
+    }
+    
+    if (!chartData.orderLines) {
+        console.warn(`⚠️ [removeOrderLine] Order lines map not found for pair ${pairId}`);
+        return;
+    }
+    
+    // Всегда пробуем сначала строковый формат (так как мы сохраняем как строку)
+    const orderIdStr = String(orderId);
+    let orderLine = chartData.orderLines.get(orderIdStr);
+    
+    // Если не найдено, пробуем другие форматы (для обратной совместимости)
+    if (!orderLine) {
+        if (typeof orderId === 'number') {
+            orderLine = chartData.orderLines.get(orderId);
+        }
+        const numericId = typeof orderId === 'string' ? parseInt(orderId, 10) : orderId;
+        if (!orderLine && !isNaN(numericId) && numericId !== orderId) {
+            orderLine = chartData.orderLines.get(numericId);
+        }
+    }
+    
+    if (orderLine) {
+        if (orderLine.line && chartData.candlestickSeries) {
+            chartData.candlestickSeries.removePriceLine(orderLine.line);
+            console.log(`✅ [removeOrderLine] Price line removed`);
+        }
+        if (orderLine.labelEl && orderLine.labelEl.parentNode) {
+            orderLine.labelEl.parentNode.removeChild(orderLine.labelEl);
+            console.log(`✅ [removeOrderLine] Label element removed`);
+        }
+        if (orderLine.intervalId) {
+            clearInterval(orderLine.intervalId);
+            console.log(`✅ [removeOrderLine] Interval cleared`);
+        }
+        // Удаляем по всем возможным ключам (строка и число)
+        chartData.orderLines.delete(orderIdStr);
+        if (typeof orderId === 'number') {
+            chartData.orderLines.delete(orderId);
+        } else {
+            const numericId = parseInt(orderId, 10);
+            if (!isNaN(numericId)) {
+                chartData.orderLines.delete(numericId);
+            }
+        }
+        console.log(`✅ [removeOrderLine] Order line removed for order ${orderId}`);
+    } else {
+        console.warn(`⚠️ [removeOrderLine] Order line not found for orderId=${orderId}. Available keys:`, Array.from(chartData.orderLines.keys()));
     }
 }
 
@@ -1116,6 +1594,7 @@ window.chartModule = {
     updateLastCandle,
     drawOrderLine,
     removeOrderLine,
+    updateOrderLineColor,
     getCurrentPairId: () => currentPairId,
     getCurrentTimeframe: () => currentTimeframe,
     getChart: (pairId) => {

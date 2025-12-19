@@ -11,6 +11,7 @@ let socket = null;
 let selectedPairs = [];
 let activePairId = null; // Текущая активная пара в UI
 let activeRounds = [];
+let roundTimers = new Map(); // roundId -> intervalId для хранения таймеров
 let userBalance = 10000.0;
 let tradeAmount = 5.0;
 let tradeDuration = 60; // секунды
@@ -34,8 +35,16 @@ document.addEventListener('DOMContentLoaded', () => {
             setupEventListeners();
             updateProfitDisplay();
             
+            // Загружаем активные раунды после небольшой задержки, чтобы график успел инициализироваться
+            setTimeout(() => {
+                loadActiveRounds();
+            }, 500);
+            
             // Запускаем HTTP polling для server time
             startServerTimePolling();
+            
+            // Запускаем глобальный таймер для обновления времени до полной минуты
+            startGlobalTimeRemainingTimer();
         } else {
             console.log('⏳ Waiting for LightweightCharts library...');
             setTimeout(waitForLibrary, 100);
@@ -116,9 +125,21 @@ function initSocket() {
         // Сохраняем время сервера (UTC) в секундах
         if (actualData && actualData.timestamp) {
             serverTimeUTC = Math.floor(actualData.timestamp);
+            if (!window.serverTimeSetDebugCount) window.serverTimeSetDebugCount = 0;
+            if (window.serverTimeSetDebugCount < 3) {
+                const testDate = new Date(serverTimeUTC * 1000);
+                console.log(`🕐 [server_time] Setting serverTimeUTC=${serverTimeUTC}, UTC time=${testDate.toISOString()}, UTC hours=${testDate.getUTCHours()}`);
+                window.serverTimeSetDebugCount++;
+            }
         } else if (actualData && actualData.time) {
             // Если timestamp нет, вычисляем из ISO строки
             serverTimeUTC = Math.floor(new Date(actualData.time).getTime() / 1000);
+            if (!window.serverTimeSetDebugCount) window.serverTimeSetDebugCount = 0;
+            if (window.serverTimeSetDebugCount < 3) {
+                const testDate = new Date(serverTimeUTC * 1000);
+                console.log(`🕐 [server_time] Setting serverTimeUTC=${serverTimeUTC} from time string, UTC time=${testDate.toISOString()}, UTC hours=${testDate.getUTCHours()}`);
+                window.serverTimeSetDebugCount++;
+            }
         }
         
         if (actualData && actualData.formatted) {
@@ -155,8 +176,8 @@ async function loadPairs() {
         const pairs = await response.json();
         
         if (pairs.length > 0) {
-            // Ищем первую доступную пару для инициализации
-            let defaultPair = pairs.find(p => p.symbol === 'AAPL') || pairs[0];
+            // Ищем BTCUSDT по умолчанию, если нет - берем первую доступную пару
+            let defaultPair = pairs.find(p => p.symbol === 'BTCUSDT') || pairs[0];
             
             selectedPairs = [defaultPair];
             activePairId = defaultPair.id;
@@ -213,7 +234,80 @@ async function loadActiveRounds() {
         activeRounds = rounds;
         updateActiveRoundsDisplay();
         
-        // Обновление ордеров на графике происходит автоматически через drawOrderLine
+        console.log(`📋 Loaded ${rounds.length} active rounds:`, rounds.map(r => ({ id: r.id, pair_id: r.pair_id, end_time: r.end_time, duration: r.duration })));
+        
+        // Останавливаем все старые таймеры
+        roundTimers.forEach((intervalId) => {
+            clearInterval(intervalId);
+        });
+        roundTimers.clear();
+        
+        // Запускаем таймеры для всех активных раундов
+        rounds.forEach(round => {
+            if (round.end_time) {
+                // Создаем объект раунда с правильной структурой
+                const roundObj = {
+                    id: round.id,
+                    pair_id: round.pair_id,
+                    end_time: round.end_time,
+                    duration: round.duration || tradeDuration,
+                };
+                startRoundTimer(roundObj);
+            }
+        });
+        
+        // Сразу обновляем время для активной пары, если есть активный раунд
+        if (activePairId) {
+            const activeRound = rounds.find(r => r.pair_id === activePairId && r.end_time);
+            if (activeRound) {
+                // ВСЕГДА используем серверное время
+                const serverTimeSec = window.getServerTimeUTC();
+                const now = serverTimeSec * 1000;
+                
+                let endTime;
+                if (typeof activeRound.end_time === 'string') {
+                    endTime = new Date(activeRound.end_time).getTime();
+                } else if (typeof activeRound.end_time === 'number') {
+                    if (activeRound.end_time < 1e10) {
+                        endTime = activeRound.end_time * 1000;
+                    } else {
+                        endTime = activeRound.end_time;
+                    }
+                } else {
+                    endTime = activeRound.end_time;
+                }
+                
+                if (!isNaN(serverTimeSec)) {
+                    // Вычисляем время до полной минуты (секунды до следующей минуты)
+                    const secondsInCurrentMinute = serverTimeSec % 60;
+                    const remaining = 60 - secondsInCurrentMinute;
+                    updateRoundTimeRemaining(activeRound.id, remaining, activePairId, activeRound.duration || tradeDuration);
+                }
+            }
+        }
+        
+        // Рисуем ордера на графике для всех активных раундов
+        // Используем небольшую задержку, чтобы график успел инициализироваться
+        setTimeout(() => {
+            rounds.forEach(round => {
+                if (round.start_price && round.pair_id && window.chartModule && window.chartModule.drawOrderLine) {
+                    const orderTime = round.start_time ? new Date(round.start_time).getTime() / 1000 : Math.floor(Date.now() / 1000);
+                    const endTime = round.end_time || null;
+                    const amount = round.amount || 0;
+                    const direction = round.direction || 'BUY';
+                    window.chartModule.drawOrderLine(
+                        round.pair_id,
+                        round.start_price,
+                        round.id.toString(),
+                        direction,
+                        orderTime,
+                        endTime,
+                        amount
+                    );
+                }
+            });
+        }, 1000);
+        
         console.log('📋 Active rounds updated');
     } catch (error) {
         console.error('Error loading active rounds:', error);
@@ -243,28 +337,43 @@ setInterval(async () => {
             if (round.end_time) {
                 addActiveRound({
                     id: round.id,
+                    pair_id: round.pair_id,
                     end_time: round.end_time,
                     start_price: round.start_price,
                 }, round.direction);
             }
         });
         
-        // Обновляем время для всех существующих раундов
-        rounds.forEach(round => {
-            if (round.end_time) {
-                const now = new Date().getTime();
-                const endTime = new Date(round.end_time).getTime();
-                if (!isNaN(endTime) && endTime > 0) {
-                    const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
-                    updateRoundTimeRemaining(round.id, remaining);
+        // Удаляем раунды, которых больше нет на сервере, и останавливаем их таймеры
+        const serverIds = new Set(rounds.map(r => r.id));
+        const removedRounds = activeRounds.filter(r => !serverIds.has(r.id));
+        removedRounds.forEach(round => {
+            // Удаляем линию и прямоугольник с графика
+            if (window.chartModule && window.chartModule.removeOrderLine) {
+                const pairId = round.pair_id;
+                if (pairId) {
+                    console.log(`🗑️ [periodic update] Removing order line for round ${round.id}, pair ${pairId}`);
+                    window.chartModule.removeOrderLine(pairId, round.id.toString());
                 }
             }
+            
+            // Останавливаем таймер
+            if (roundTimers.has(round.id)) {
+                clearInterval(roundTimers.get(round.id));
+                roundTimers.delete(round.id);
+            }
         });
-        
-        // Удаляем раунды, которых больше нет на сервере
-        const serverIds = new Set(rounds.map(r => r.id));
         activeRounds = activeRounds.filter(r => serverIds.has(r.id));
         updateActiveRoundsDisplay();
+        
+        // Обновляем данные существующих раундов (end_time может измениться)
+        rounds.forEach(serverRound => {
+            const existingRound = activeRounds.find(r => r.id === serverRound.id);
+            if (existingRound && serverRound.end_time) {
+                existingRound.end_time = serverRound.end_time;
+                // Таймер уже работает, он сам обновит время
+            }
+        });
     } catch (error) {
         console.error('Error loading active rounds:', error);
     }
@@ -310,7 +419,8 @@ function updateSelectedPair(activePair) {
     
     // Удаляем все существующие вкладки и окна
     const existingTabs = tabsContainer.querySelectorAll('.item');
-    const existingWindows = windowsContainer.querySelectorAll('#window');
+    // Все окна трейдинга имеют id вида window_<pairId>
+    const existingWindows = windowsContainer.querySelectorAll('section[id^="window_"]');
     existingTabs.forEach(el => el.remove());
     existingWindows.forEach(el => el.remove());
     pairWindows.clear();
@@ -345,16 +455,87 @@ function updateSelectedPair(activePair) {
     }
 }
 
+// Маппинг символов на URL иконок из файла test
+const SYMBOL_ICON_MAP = {
+    'BTCUSDT': 'https://zlincontent.com/cdn/icons/symbols/bitcoin.png',
+    'BTCUSD': 'https://zlincontent.com/cdn/icons/symbols/btcusd.png',
+    'LTCUSDT': 'https://zlincontent.com/cdn/icons/symbols/litecoin.png',
+    'BNBUSDT': 'https://zlincontent.com/cdn/icons/symbols/bnb.png',
+    'ADAUSDT': 'https://zlincontent.com/cdn/icons/symbols/adausdt.png',
+    'AUDJPY': 'https://zlincontent.com/cdn/icons/symbols/audjpy.png',
+    'EURUSD': 'https://zlincontent.com/cdn/icons/symbols/otc/eurusd.png',
+    'EURGBP': 'https://zlincontent.com/cdn/icons/symbols/otc/eurgbp.png',
+    'XAUUSD': 'https://zlincontent.com/cdn/icons/symbols/otc/xauusd.png',
+    'GBPUSD': 'https://zlincontent.com/cdn/icons/symbols/gbpusd.png',
+    'AUDCAD': 'https://zlincontent.com/cdn/icons/symbols/audcad.png',
+    'USDCAD': 'https://zlincontent.com/cdn/icons/symbols/usdcad.png',
+    'NZDUSD': 'https://zlincontent.com/cdn/icons/symbols/nzdusd.png',
+    'USDJPY': 'https://zlincontent.com/cdn/icons/symbols/usdjpy.png',
+    'CADJPY': 'https://zlincontent.com/cdn/icons/symbols/cadjpy.png',
+    'CHFJPY': 'https://zlincontent.com/cdn/icons/symbols/chfjpy.png',
+    'XRPUSDT': 'https://zlincontent.com/cdn/icons/symbols/xrp.png',
+    'ETHUSDT': 'https://zlincontent.com/cdn/icons/symbols/ethereum.png',
+    'SOLUSDT': 'https://zlincontent.com/cdn/icons/symbols/solana.png',
+    'AVAXUSDT': 'https://zlincontent.com/cdn/icons/symbols/avax.png',
+    'DOGEUSDT': 'https://zlincontent.com/cdn/icons/symbols/doge.png',
+    'EURNZD': 'https://zlincontent.com/cdn/icons/symbols/eurnzd.png',
+    'AUDCHF': 'https://zlincontent.com/cdn/icons/symbols/audchf.png',
+    'EURAUD': 'https://zlincontent.com/cdn/icons/symbols/euraud.png',
+    'SUIUSDT': 'https://zlincontent.com/cdn/icons/symbols/sui.png',
+    'GBPJPY': 'https://zlincontent.com/cdn/icons/symbols/gbpjpy.png',
+    'CADCHF': 'https://zlincontent.com/cdn/icons/symbols/cadchf.png',
+    'GBPCHF': 'https://zlincontent.com/cdn/icons/symbols/gbpchf.png',
+    'GBPAUD': 'https://zlincontent.com/cdn/icons/symbols/gbpaud.png',
+    'NZDJPY': 'https://zlincontent.com/cdn/icons/symbols/nzdjpy.png',
+    'USDCHF': 'https://zlincontent.com/cdn/icons/symbols/usdchf.png',
+    'LINKUSDT': 'https://zlincontent.com/cdn/icons/symbols/link.png',
+    'EURCHF': 'https://zlincontent.com/cdn/icons/symbols/eurchf.png',
+    'XPLUSDT': 'https://zlincontent.com/cdn/icons/symbols/xpl.png',
+    'EURCAD': 'https://zlincontent.com/cdn/icons/symbols/eurcad.png',
+    'XLMUSDT': 'https://zlincontent.com/cdn/icons/symbols/xlm.png',
+    'AUDNZD': 'https://zlincontent.com/cdn/icons/symbols/audnzd.png',
+    'AUDUSD': 'https://zlincontent.com/cdn/icons/symbols/audusd.png',
+    'NZDCHF': 'https://zlincontent.com/cdn/icons/symbols/nzdchf.png',
+    'GBPCAD': 'https://zlincontent.com/cdn/icons/symbols/gbpcad.png',
+    'GBPNZD': 'https://zlincontent.com/cdn/icons/symbols/gbpnzd.png',
+    'NZDCAD': 'https://zlincontent.com/cdn/icons/symbols/nzdcad.png',
+};
+
+function getIconUrl(symbol) {
+    const upperSymbol = symbol.toUpperCase();
+    if (SYMBOL_ICON_MAP[upperSymbol]) {
+        return SYMBOL_ICON_MAP[upperSymbol];
+    }
+    // Fallback для символов с /otc/ или других путей
+    if (upperSymbol.includes('BTC') && !upperSymbol.includes('USDT')) {
+        return 'https://zlincontent.com/cdn/icons/symbols/otc/bitcoin.png';
+    }
+    if (upperSymbol.includes('LTC')) {
+        return 'https://zlincontent.com/cdn/icons/symbols/otc/litecoin.png';
+    }
+    if (upperSymbol.includes('ETH')) {
+        return 'https://zlincontent.com/cdn/icons/symbols/otc/ethereum.png';
+    }
+    if (upperSymbol.includes('SOL')) {
+        return 'https://zlincontent.com/cdn/icons/symbols/otc/solana.png';
+    }
+    if (upperSymbol.includes('AVAX')) {
+        return 'https://zlincontent.com/cdn/icons/symbols/otc/avax.png';
+    }
+    // Общий fallback
+    return `https://zlincontent.com/cdn/icons/symbols/${symbol.toLowerCase()}.png`;
+}
+
 function createTab(pair) {
     const tab = document.createElement('div');
     tab.className = 'item';
     tab.setAttribute('data-pair-id', pair.id);
     tab.setAttribute('data-v-f02899e6', '');
     
-    // URL иконки символа (можно использовать реальные иконки или placeholder)
-    const iconUrl = `https://zlincontent.com/cdn/icons/symbols/${pair.symbol.toLowerCase()}.png`;
-    // Fallback на placeholder, если иконка не загрузится
-    const fallbackIcon = `https://via.placeholder.com/30x30/333333/ffffff?text=${pair.symbol.substring(0, 1).toUpperCase()}`;
+    // URL иконки символа из маппинга
+    const iconUrl = getIconUrl(pair.symbol);
+    // Локальный fallback, чтобы не было сетевых ошибок DNS
+    const fallbackIcon = '/api/img/mini-logo.png';
     
     tab.innerHTML = `
         <button class="close" data-v-f02899e6="">
@@ -438,8 +619,8 @@ function createWindow(pair) {
                 </button>
                 <button class="bg-sell btn-trade-sell" data-pair-id="${pair.id}" data-direction="SELL">
                     <span class="material-symbols-outlined zli" translate="no">trending_down</span>
-                    <text>Sell</text>
                     <span class="mobile-profit">85%</span>
+                    <text>Sell</text>
                 </button>
             </div>
             <div class="rb-server-time">
@@ -525,7 +706,8 @@ function switchToPair(pairId) {
     const pair = selectedPairs.find(p => p.id === pairId);
     if (!pair) return;
     
-        activePairId = pairId;
+    activePairId = pairId;
+    console.log(`🔀 switchToPair called, activePairId = ${activePairId}`);
     
     // Обновляем вкладки
     pairWindows.forEach((data, id) => {
@@ -543,11 +725,48 @@ function switchToPair(pairId) {
     if (windowData && window.chartModule) {
         const chartId = windowData.windowElement.getAttribute('data-chart-id');
         const chartContainer = windowData.windowElement.querySelector(`#${chartId}`);
-        if (chartContainer && !chartContainer.querySelector('.chart-wrapper')) {
+        if (chartContainer) {
+            // Всегда переинициализируем график под выбранную пару,
+            // чтобы гарантированно подхватить правильный pairId и данные
+            console.log(`📈 Re-init chart for pair ${pairId} in container ${chartId}`);
             window.chartModule.initChart(pairId, chartContainer);
+        }
+    }
+    
+    // Обновляем время для активной пары, если есть активный раунд
+    const activeRound = activeRounds.find(r => r.pair_id === pairId && r.end_time);
+    if (activeRound) {
+        // ВСЕГДА используем серверное время
+        const serverTimeSec = window.getServerTimeUTC();
+        const now = serverTimeSec * 1000;
+        
+        let endTime;
+        if (typeof activeRound.end_time === 'string') {
+            endTime = new Date(activeRound.end_time).getTime();
+        } else if (typeof activeRound.end_time === 'number') {
+            if (activeRound.end_time < 1e10) {
+                endTime = activeRound.end_time * 1000;
+            } else {
+                endTime = activeRound.end_time;
+            }
         } else {
-            const timeframe = window.chartModule ? window.chartModule.getCurrentTimeframe() : '1m';
-            window.chartModule.updateChart(pairId, timeframe);
+            endTime = activeRound.end_time;
+        }
+        
+        if (!isNaN(serverTimeSec)) {
+            // Вычисляем время до полной минуты (секунды до следующей минуты)
+            const secondsInCurrentMinute = serverTimeSec % 60;
+            const remaining = 60 - secondsInCurrentMinute;
+            updateRoundTimeRemaining(activeRound.id, remaining, pairId, activeRound.duration);
+        }
+    }
+    
+    // Обновляем TradingView (UDF) график под выбранную пару, если он используется
+    if (window.tradingViewModule && typeof window.tradingViewModule.updatePair === 'function') {
+        try {
+            window.tradingViewModule.updatePair(pairId);
+        } catch (e) {
+            console.warn('⚠️ Error updating TradingView pair:', e);
         }
     }
     
@@ -695,7 +914,7 @@ function renderPairsList(pairs) {
     
     pairs.forEach(pair => {
         const isSelected = selectedPairs.some(p => p.id === pair.id);
-        const iconUrl = `https://zlincontent.com/cdn/icons/symbols/${pair.symbol.toLowerCase()}.png`;
+        const iconUrl = getIconUrl(pair.symbol);
         const category = pair.category || 'Crypto';
         const payout = pair.payout || '85%';
         const lastPrice = pair.last_price || '0.000000';
@@ -706,7 +925,7 @@ function renderPairsList(pairs) {
             <td data-v-a849e800="">
                 <div data-v-a849e800="" class="symbol-detail">
                     <div data-v-a849e800="" class="symbol-img">
-                        <img data-v-a849e800="" src="${iconUrl}" onerror="this.src='https://via.placeholder.com/30x30/333333/ffffff?text=${pair.symbol.substring(0, 1).toUpperCase()}'" alt="${pair.symbol}">
+                        <img data-v-a849e800="" src="${iconUrl}" onerror="this.src='/api/img/mini-logo.png'" alt="${pair.symbol}">
                     </div>
                     <div data-v-a849e800="" class="symbol-data">${pair.name || pair.symbol} <div data-v-a849e800="" class="h-description">${category}</div></div>
                 </div>
@@ -714,9 +933,9 @@ function renderPairsList(pairs) {
             <td data-v-a849e800="" align="center" class="arial mobile-hide">${lastPrice}</td>
             <td data-v-a849e800="" align="center" class="arial symbol-payout text-buy">${payout}</td>
             <td data-v-a849e800="" align="center">
-                <span data-v-a849e800="" class="material-symbols-outlined s-icon">local_fire_department</span>
-                <span data-v-a849e800="" class="material-symbols-outlined s-icon">local_fire_department</span>
-                <span data-v-a849e800="" class="material-symbols-outlined s-icon">local_fire_department</span>
+                <span data-v-a849e800="" class="material-symbols-outlined s-icon volatility-icon" style="opacity: 0.3;">local_fire_department</span>
+                <span data-v-a849e800="" class="material-symbols-outlined s-icon volatility-icon" style="opacity: 0.3;">local_fire_department</span>
+                <span data-v-a849e800="" class="material-symbols-outlined s-icon volatility-icon" style="opacity: 0.3;">local_fire_department</span>
             </td>
         `;
         
@@ -797,17 +1016,52 @@ function updateBalanceDisplay() {
 }
 
 function updateServerTime(timeStr) {
-    if (!timeStr || timeStr === '0' || timeStr === '00:00:00') {
-        // Если время не пришло, используем локальное время как fallback
-        const now = new Date();
-        timeStr = now.toLocaleTimeString('ru-RU', { hour12: false });
+    // Сервер всегда возвращает время, поэтому используем только serverTimeUTC
+    // Игнорируем timeStr, чтобы избежать двойного вычитания
+    if (serverTimeUTC === null || serverTimeUTC === undefined) {
+        return; // Не обновляем, если серверное время еще не получено
+    }
+    
+    // serverTimeUTC - это Unix timestamp в UTC, форматируем его и вычитаем 3 часа для UTC-3
+    const date = new Date(serverTimeUTC * 1000);
+    let hours = date.getHours(); // это правильно
+    const minutes = date.getUTCMinutes();
+    const seconds = date.getUTCSeconds();
+    
+    // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
+    if (!window.serverTimeDebugCount) window.serverTimeDebugCount = 0;
+    if (window.serverTimeDebugCount < 5) {
+        console.log(`🕐 [updateServerTime] DEBUG: serverTimeUTC=${serverTimeUTC}, date=${date.toISOString()}, UTC hours=${hours}, minutes=${minutes}, seconds=${seconds}`);
+        window.serverTimeDebugCount++;
+    }
+    
+    // Вычитаем 3 часа для UTC-3
+    const originalHours = hours;
+    hours = hours - 3;
+    if (hours < 0) {
+        hours = hours + 24; // Если отрицательное, переходим на предыдущий день
+    }
+    
+    if (window.serverTimeDebugCount <= 5) {
+        console.log(`🕐 [updateServerTime] DEBUG: originalHours=${originalHours}, after -3: ${hours}, final time will be: ${hours}:${minutes}:${seconds}`);
+    }
+    
+    const displayTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    
+    // Логируем displayTime для отладки
+    if (window.serverTimeDebugCount <= 5) {
+        console.log(`🕐 [updateServerTime] displayTime=${displayTime}, will be set to element`);
     }
     
     // Обновляем время во всех окнах
     pairWindows.forEach((data, pairId) => {
         const serverTimeEl = document.getElementById(`server-clock-${pairId}`);
         if (serverTimeEl) {
-            serverTimeEl.textContent = timeStr;
+            serverTimeEl.textContent = displayTime;
+            // Логируем, что именно записано в элемент
+            if (window.serverTimeDebugCount <= 5) {
+                console.log(`🕐 [updateServerTime] Set server-clock-${pairId} to: ${serverTimeEl.textContent}`);
+            }
         }
     });
 }
@@ -844,9 +1098,7 @@ function startServerTimePolling() {
             }
         } catch (error) {
             console.error('Error fetching server time:', error);
-            // Fallback на локальное время при ошибке
-            const now = new Date();
-            updateServerTime(now.toLocaleTimeString('ru-RU', { hour12: false }));
+            // Сервер всегда возвращает время, поэтому просто логируем ошибку
         }
     };
     
@@ -855,10 +1107,90 @@ function startServerTimePolling() {
     setInterval(pollServerTime, 1000);
 }
 
-// Экспортируем функцию для получения времени сервера (UTC)
+// Экспортируем функцию для получения времени сервера (UTC-3)
 window.getServerTimeUTC = function() {
-    return serverTimeUTC;
+    // Сервер всегда возвращает время, поэтому просто возвращаем serverTimeUTC минус 3 часа
+    if (serverTimeUTC === null || serverTimeUTC === undefined) {
+        return null; // Возвращаем null, если серверное время еще не получено
+    }
+    
+    const UTC_OFFSET_HOURS = 3;
+    const UTC_OFFSET_SECONDS = UTC_OFFSET_HOURS * 3600;
+    
+    // Возвращаем серверное время (UTC) минус 3 часа для UTC-3
+    return serverTimeUTC - UTC_OFFSET_SECONDS;
 };
+
+// Глобальный таймер для обновления времени до полной минуты
+let globalTimeRemainingInterval = null;
+
+function startGlobalTimeRemainingTimer() {
+    // Останавливаем предыдущий таймер, если есть
+    if (globalTimeRemainingInterval) {
+        clearInterval(globalTimeRemainingInterval);
+    }
+    
+    console.log('⏱️ [startGlobalTimeRemainingTimer] Starting global time remaining timer');
+    
+    globalTimeRemainingInterval = setInterval(() => {
+        // ВСЕГДА используем серверное время
+        const serverTimeSec = window.getServerTimeUTC();
+        
+        if (isNaN(serverTimeSec)) {
+            return;
+        }
+        
+        // Вычисляем время до полной минуты (секунды до следующей минуты)
+        const secondsInCurrentMinute = serverTimeSec % 60;
+        const remaining = 60 - secondsInCurrentMinute;
+        
+        // Обновляем время для всех активных пар
+        selectedPairs.forEach(pair => {
+            const timeElement = document.getElementById(`round-start-time-${pair.id}`);
+            if (timeElement) {
+                const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+                const ss = String(remaining % 60).padStart(2, '0');
+                timeElement.textContent = `${mm}:${ss}`;
+                
+                // Меняем цвет в зависимости от оставшегося времени
+                // ≤10 секунд - красный, >10 секунд - зеленый
+                if (remaining <= 10) {
+                    timeElement.className = 'pull-right text-sell';
+                } else {
+                    timeElement.className = 'pull-right text-buy';
+                }
+            }
+            
+            // Обновляем прогресс-бар для всех пар (показываем оставшееся время до полной минуты)
+            const barElement = document.getElementById(`round-bar-${pair.id}`);
+            if (barElement) {
+                // Прогресс рассчитываем как оставшееся время до полной минуты
+                // remaining - секунды до полной минуты (60-1)
+                // Прогресс = (remaining / 60) * 100
+                // При remaining = 60 (начало минуты) → 100%
+                // При remaining = 0 (конец минуты) → 0%
+                const progress = Math.max(0, Math.min(100, (remaining / 60) * 100));
+                barElement.style.width = `${progress}%`;
+                
+                // Меняем цвет прогресс-бара в зависимости от оставшегося времени
+                // ≤10 секунд - красный, >10 секунд - зеленый
+                if (remaining <= 10) {
+                    barElement.className = 'sc-bar-fill bg-sell';
+                } else {
+                    barElement.className = 'sc-bar-fill bg-buy';
+                }
+            }
+            
+            // Обновляем цвет линии ордера для активных раундов этой пары
+            if (window.chartModule && window.chartModule.updateOrderLineColor) {
+                const activeRoundsForPair = activeRounds.filter(r => r.pair_id === pair.id);
+                activeRoundsForPair.forEach(round => {
+                    window.chartModule.updateOrderLineColor(pair.id, round.id.toString(), remaining);
+                });
+            }
+        });
+    }, 1000);
+}
 
 // HTTP Polling для обновления цен свечей (надежный способ вместо WebSocket)
 // startPricePolling удалена - LightweightCharts обновляет данные автоматически через updateLastCandle
@@ -940,13 +1272,15 @@ async function createRound(direction, pairId = null) {
                 console.log(`📏 [createRound] Order time: ${orderTime} (from start_time: ${round.start_time})`);
                 // Передаем end_time для обратного отсчета
                 const endTime = round.end_time || null;
+                const amount = round.amount || tradeAmount || 0;
                 window.chartModule.drawOrderLine(
                     targetPairId,
                     orderPrice, // Это round.start_price (цена создания ордера)
                     round.id.toString(),
                     direction,
                     orderTime, // Передаем время создания ордера
-                    endTime // Передаем время окончания раунда для обратного отсчета
+                    endTime, // Передаем время окончания раунда для обратного отсчета
+                    amount // Сумма, на которую покупаем
                 );
             }
             
@@ -966,7 +1300,7 @@ async function createRound(direction, pairId = null) {
 function addActiveRound(roundData, direction) {
     const round = {
         id: roundData.id,
-                pair_id: activePairId || 1,
+        pair_id: roundData.pair_id || activePairId || 1,
         direction: direction,
         amount: tradeAmount,
         duration: tradeDuration,
@@ -980,45 +1314,107 @@ function addActiveRound(roundData, direction) {
 }
 
 function startRoundTimer(round) {
+    // Останавливаем старый таймер для этого раунда, если есть
+    if (roundTimers.has(round.id)) {
+        clearInterval(roundTimers.get(round.id));
+    }
+    
+    console.log(`⏱️ [startRoundTimer] Starting timer for round ${round.id}, pair ${round.pair_id}, end_time: ${round.end_time}`);
+    
     const interval = setInterval(() => {
-        const now = new Date().getTime();
+        // ВСЕГДА используем серверное время для расчета
+        const serverTimeSec = window.getServerTimeUTC();
+        const now = serverTimeSec * 1000; // Конвертируем в миллисекунды
+        
         let endTime;
         
         // Парсим время окончания
         if (typeof round.end_time === 'string') {
             endTime = new Date(round.end_time).getTime();
+        } else if (typeof round.end_time === 'number') {
+            // Если это Unix timestamp в секундах, конвертируем в миллисекунды
+            if (round.end_time < 1e10) {
+                endTime = round.end_time * 1000;
+            } else {
+                endTime = round.end_time;
+            }
         } else {
             endTime = round.end_time;
         }
         
         // Проверяем валидность времени
-        if (isNaN(endTime) || endTime === 0) {
-            console.error('Invalid end_time for round:', round);
+        if (isNaN(endTime) || endTime === 0 || isNaN(now) || isNaN(serverTimeSec)) {
+            console.error('Invalid end_time or now for round:', round, 'now:', now, 'serverTimeSec:', serverTimeSec);
             clearInterval(interval);
+            roundTimers.delete(round.id);
             return;
         }
         
-        const remaining = Math.max(0, Math.floor((endTime - now) / 1000));
+        // Вычисляем время до полной минуты (секунды до следующей минуты)
+        const secondsInCurrentMinute = serverTimeSec % 60;
+        const remaining = 60 - secondsInCurrentMinute;
         
-        if (remaining <= 0) {
-            clearInterval(interval);
-            // Раунд завершится через WebSocket событие
-        } else {
-            updateRoundTimeRemaining(round.id, remaining);
+        // Логируем только раз в 10 секунд, чтобы не засорять консоль
+        if (remaining % 10 === 0 || remaining < 10) {
+            console.log(`⏱️ [startRoundTimer] Round ${round.id}, time to full minute: ${remaining}s, serverTime: ${serverTimeSec}, seconds in minute: ${secondsInCurrentMinute}`);
         }
+        updateRoundTimeRemaining(round.id, remaining, round.pair_id, round.duration);
     }, 1000);
+    
+    // Сохраняем ID интервала
+    roundTimers.set(round.id, interval);
 }
 
-function updateRoundTimeRemaining(roundId, seconds) {
+function updateRoundTimeRemaining(roundId, seconds, pairId = null, duration = null) {
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
     const timeStr = `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     
+    // Обновляем элемент в списке активных раундов
     const roundElement = document.querySelector(`[data-round-id="${roundId}"]`);
     if (roundElement) {
         const timeElement = roundElement.querySelector('.round-time');
         if (timeElement) {
             timeElement.textContent = timeStr;
+        }
+    }
+    
+    // Обновляем элемент в rightbar для конкретной пары
+    if (pairId) {
+        const timeElement = document.getElementById(`round-start-time-${pairId}`);
+        if (timeElement) {
+            timeElement.textContent = timeStr;
+            
+            // Меняем цвет в зависимости от оставшегося времени
+            // ≤10 секунд - красный, >10 секунд - зеленый
+            if (seconds <= 10) {
+                timeElement.className = 'pull-right text-sell';
+            } else {
+                timeElement.className = 'pull-right text-buy';
+            }
+        }
+        
+        // Обновляем прогресс-бар
+        const barElement = document.getElementById(`round-bar-${pairId}`);
+        if (barElement && duration) {
+            const progress = Math.max(0, Math.min(100, (seconds / duration) * 100));
+            barElement.style.width = `${progress}%`;
+            
+            // Меняем цвет прогресс-бара в зависимости от оставшегося времени
+            // ≤10 секунд - красный, >10 секунд - зеленый
+            if (seconds <= 10) {
+                barElement.className = 'sc-bar-fill bg-sell';
+            } else {
+                barElement.className = 'sc-bar-fill bg-buy';
+            }
+        }
+        
+        // Обновляем цвет линии ордера для этой пары
+        if (window.chartModule && window.chartModule.updateOrderLineColor) {
+            const activeRoundsForPair = activeRounds.filter(r => r.pair_id === pairId);
+            activeRoundsForPair.forEach(round => {
+                window.chartModule.updateOrderLineColor(pairId, round.id.toString(), seconds);
+            });
         }
     }
 }
@@ -1068,6 +1464,26 @@ function updateActiveRoundsDisplay() {
 }
 
 function handleRoundFinished(data) {
+    console.log(`🏁 [handleRoundFinished] Round finished:`, data);
+    
+    // Получаем pair_id из данных или из активных раундов
+    const finishedRound = activeRounds.find(r => r.id === data.round_id);
+    const pairId = finishedRound ? finishedRound.pair_id : (data.pair_id || null);
+    
+    // Удаляем линию и прямоугольник с графика СРАЗУ
+    if (window.chartModule && window.chartModule.removeOrderLine && pairId) {
+        console.log(`🗑️ [handleRoundFinished] Removing order line for round ${data.round_id}, pair ${pairId}`);
+        window.chartModule.removeOrderLine(pairId, data.round_id.toString());
+    } else {
+        console.warn(`⚠️ [handleRoundFinished] Cannot remove order line: chartModule=${!!window.chartModule}, pairId=${pairId}`);
+    }
+    
+    // Останавливаем таймер для этого раунда
+    if (roundTimers.has(data.round_id)) {
+        clearInterval(roundTimers.get(data.round_id));
+        roundTimers.delete(data.round_id);
+    }
+    
     // Удаляем раунд из активных
     activeRounds = activeRounds.filter(r => r.id !== data.round_id);
     updateActiveRoundsDisplay();
@@ -1082,13 +1498,66 @@ function handleRoundFinished(data) {
         : `Проигрыш. Потеряно: R$ ${Math.abs(data.profit).toFixed(2)}`;
     
     console.log(message);
-    alert(message);
+    
+    // Показываем всплывашку при выигрыше
+    if (data.win && data.profit > 0) {
+        showProfitNotification(data.profit);
+    }
+}
+
+function showProfitNotification(profit) {
+    // Создаем элемент всплывашки
+    const notification = document.createElement('div');
+    notification.id = 'profit-notification';
+    notification.style.cssText = `
+        position: fixed;
+        left: 20px;
+        bottom: 20px;
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+        color: white;
+        padding: 16px 24px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+        z-index: 10000;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        min-width: 200px;
+        animation: slideInLeft 0.3s ease-out;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    `;
+    
+    notification.innerHTML = `
+        <span style="font-size: 24px;">🎉</span>
+        <div>
+            <div style="font-size: 14px; opacity: 0.9;">Выигрыш!</div>
+            <div style="font-size: 20px; margin-top: 4px;">+R$ ${profit.toFixed(2).replace('.', ',')}</div>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Удаляем через 5 секунд с анимацией
+    setTimeout(() => {
+        notification.style.animation = 'slideOutLeft 0.3s ease-in';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 5000);
 }
 
 function updateRoundTime(data) {
     // Обновление времени раунда через WebSocket
     if (data.round_id) {
-        updateRoundTimeRemaining(data.round_id, data.remaining);
+        // Находим раунд в активных, чтобы получить pair_id и duration
+        const round = activeRounds.find(r => r.id === data.round_id);
+        const pairId = round ? round.pair_id : (data.pair_id || null);
+        const duration = round ? round.duration : (data.duration || null);
+        updateRoundTimeRemaining(data.round_id, data.remaining, pairId, duration);
     }
 }
 

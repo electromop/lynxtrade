@@ -2,7 +2,7 @@ import random
 import requests
 
 def get_current_price(pair_id):
-    """Получить текущую цену пары (реальная для крипто, симулированная для форекса)"""
+    """Получить текущую цену пары с Binance API"""
     from models import get_db
     
     # Получаем символ пары из базы данных
@@ -18,30 +18,51 @@ def get_current_price(pair_id):
     
     symbol = row[0]
     
-    # Пробуем получить реальную цену с Binance для USDT пар
-    if symbol.endswith('USDT'):
-        try:
-            url = 'https://api.binance.com/api/v3/ticker/price'
-            params = {'symbol': symbol}
-            response = requests.get(url, params=params, timeout=3)
-            response.raise_for_status()
-            data = response.json()
-            return float(data['price'])
-        except Exception as e:
-            print(f'Error fetching real price for {symbol}: {e}')
-            # Fallback на симуляцию
+    # Проверяем, что это USDT пара (Binance формат)
+    # Если не USDT пара, используем симуляцию без запроса к Binance
+    if not symbol.endswith('USDT'):
+        # Для не-USDT пар используем симуляцию
+        base_prices = {
+            'BTCUSDT': 65000.0,
+            'ETHUSDT': 3500.0,
+            'BNBUSDT': 600.0,
+            'SOLUSDT': 150.0,
+            'ADAUSDT': 0.5
+        }
+        base = base_prices.get(symbol, 100.0)
+        return base + random.uniform(-base * 0.001, base * 0.001)
     
-    # Симулированные цены для не-USDT пар и акций
-    base_prices = {
-        'AAPL': 175.0,  # Apple Inc. для тестирования TradingView
-        'BTCUSDT': 65000.0,
-        'ETHUSDT': 3500.0,
-        'BNBUSDT': 600.0,
-        'SOLUSDT': 150.0,
-        'ADAUSDT': 0.5
-    }
-    
-    base = base_prices.get(symbol, 100.0)
-    # Добавляем небольшое случайное отклонение
-    return base + random.uniform(-base * 0.001, base * 0.001)
+    # Для USDT пар пытаемся получить реальную цену с Binance
+    try:
+        url = 'https://api.binance.com/api/v3/ticker/price'
+        params = {'symbol': symbol}
+        response = requests.get(url, params=params, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        price = float(data['price'])
+        return price
+    except requests.exceptions.RequestException as e:
+        print(f'Error fetching real price for {symbol} from Binance: {e}')
+        # Fallback на симуляцию только если Binance недоступен
+        base_prices = {
+            'BTCUSDT': 65000.0,
+            'ETHUSDT': 3500.0,
+            'BNBUSDT': 600.0,
+            'SOLUSDT': 150.0,
+            'ADAUSDT': 0.5
+        }
+        base = base_prices.get(symbol, 100.0)
+        return base + random.uniform(-base * 0.001, base * 0.001)
+    except (KeyError, ValueError) as e:
+        print(f'Error parsing price for {symbol}: {e}')
+        # Fallback на симуляцию
+        base_prices = {
+            'BTCUSDT': 65000.0,
+            'ETHUSDT': 3500.0,
+            'BNBUSDT': 600.0,
+            'SOLUSDT': 150.0,
+            'ADAUSDT': 0.5
+        }
+        base = base_prices.get(symbol, 100.0)
+        return base + random.uniform(-base * 0.001, base * 0.001)
 
