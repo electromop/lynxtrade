@@ -1,9 +1,11 @@
 // Lightweight Charts модуль
 // Полная замена TradingView на open source lightweight-charts
 
-// API_BASE объявлен в datafeed.js как window.API_BASE
+// API_BASE объявлен в config.js
+// Если config.js не загружен, используем fallback
 if (!window.API_BASE) {
     window.API_BASE = window.location.origin + '/api';
+    console.warn('⚠️ [Chart] API_BASE не установлен в config.js, используется fallback:', window.API_BASE);
 }
 
 let charts = new Map(); // pairId -> { chart, candlestickSeries, container, orderLines }
@@ -683,6 +685,32 @@ function initChart(pairId = 1, containerElement = null) {
     
     // Добавляем chartHeader внутрь chartCanvasContainer, чтобы он был поверх графика
     chartCanvasContainer.appendChild(chartHeader);
+    
+    // Добавляем иконку TradingView в левый нижний угол графика
+    const tradingViewIcon = document.createElement('div');
+    tradingViewIcon.className = 'tradingview-icon';
+    tradingViewIcon.style.cssText = `
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #1a1d29;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        cursor: pointer;
+        overflow: hidden;
+    `;
+    const iconImg = document.createElement('img');
+    iconImg.src = '/api/img/image_trading_view.png';
+    iconImg.style.cssText = 'width: 100%; height: 100%; object-fit: contain; padding: 8px;';
+    iconImg.alt = 'TradingView';
+    tradingViewIcon.appendChild(iconImg);
+    chartCanvasContainer.appendChild(tradingViewIcon);
+    
     chartInnerContainer.appendChild(chartCanvasContainer);
     
     // Создаем контейнер для левого тулбара и графика
@@ -1378,7 +1406,7 @@ function drawOrderLine(pairId, price, orderId, side = 'BUY', orderTime = null, e
         labelEl.style.display = 'flex';
         // Базовый шрифт Arial
         labelEl.style.fontFamily = "Arial, Helvetica, sans-serif";
-        labelEl.style.fontSize = '12px';
+        labelEl.style.fontSize = '10px';
         // Остроугольный прямоугольник
         labelEl.style.borderRadius = '0px';
         labelEl.style.overflow = 'hidden';
@@ -1392,6 +1420,7 @@ function drawOrderLine(pairId, price, orderId, side = 'BUY', orderTime = null, e
         timeEl.style.color = isBuy ? '#22c55e' : '#ef4444';
         timeEl.style.fontWeight = '600';
         timeEl.style.fontFamily = "Arial, Helvetica, sans-serif";
+        timeEl.style.fontSize = '10px';
         timeEl.textContent = '00:00';
         
         // Блок суммы: показываем сумму сделки, а не цену входа
@@ -1402,6 +1431,7 @@ function drawOrderLine(pairId, price, orderId, side = 'BUY', orderTime = null, e
         amountEl.style.color = '#ffffff';
         amountEl.style.fontWeight = '600';
         amountEl.style.fontFamily = "Arial, Helvetica, sans-serif";
+        amountEl.style.fontSize = '10px';
         const displayAmount = (amount != null && !isNaN(amount)) ? amount : price;
         amountEl.textContent = `R$ ${displayAmount.toFixed(2)}`;
         

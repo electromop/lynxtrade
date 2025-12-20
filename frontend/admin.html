@@ -152,8 +152,10 @@
         <div class="message" id="message"></div>
     </div>
     
+    <script src="js/config.js"></script>
     <script>
-        const API_BASE = window.location.origin + '/api';
+        // Используем API_BASE из config.js, если доступен
+        const API_BASE = window.API_BASE || window.location.origin + '/api';
         
         // Загрузка текущего значения
         async function loadWinRate() {

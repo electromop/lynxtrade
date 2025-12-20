@@ -50,9 +50,10 @@ function initTradingView(pairId = 1, containerElement = null) {
     }
     
     // Используем внешний UDF‑фид (стандартный протокол TradingView UDF)
-    // Базовый URL: http://127.0.0.1:80  → библиотека сама будет дергать /symbols, /history и т.д.
-    const datafeed = new Datafeeds.UDFCompatibleDatafeed('http://127.0.0.1:80');
-    console.log(`📊 [initTradingView] Using external UDF datafeed for pair ${pairId}`);
+    // Используем API_BASE из config.js (без /api суффикса, так как UDF ожидает базовый URL)
+    const udfBaseUrl = window.API_BASE ? window.API_BASE.replace('/api', '') : window.location.origin;
+    const datafeed = new Datafeeds.UDFCompatibleDatafeed(udfBaseUrl);
+    console.log(`📊 [initTradingView] Using external UDF datafeed for pair ${pairId} with base URL: ${udfBaseUrl}`);
 
     // Переменная для хранения broker (будет установлена в broker_factory)
     let brokerInstance = null;

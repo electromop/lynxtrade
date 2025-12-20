@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  lynxtrade:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lynxtrade-app
+    ports:
+      - "5500:5500"
+    volumes:
+      # Сохраняем базу данных на хосте
+      - ./database:/app/database
+      # Опционально: монтируем frontend для разработки (можно закомментировать)
+      # - ./frontend:/app/frontend
+    environment:
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - lynxtrade-network
+
+networks:
+  lynxtrade-network:
+    driver: bridge
+

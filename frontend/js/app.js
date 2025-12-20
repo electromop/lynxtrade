@@ -1,9 +1,9 @@
-// API_BASE объявлен в datafeed.js как window.API_BASE
+// API_BASE объявлен в config.js
 // Используем напрямую window.API_BASE
-// Устанавливаем API_BASE, если он еще не установлен
+// Если config.js не загружен, используем fallback
 if (!window.API_BASE) {
     window.API_BASE = window.location.origin + '/api';
-    console.log('🔧 API_BASE установлен:', window.API_BASE);
+    console.warn('⚠️ [App] API_BASE не установлен в config.js, используется fallback:', window.API_BASE);
 }
 
 // currentPairId управляется через window.chartModule
@@ -14,6 +14,34 @@ let activeRounds = [];
 let roundTimers = new Map(); // roundId -> intervalId для хранения таймеров
 let userBalance = 10000.0;
 let tradeAmount = 5.0;
+
+// Функции для сохранения/загрузки выбранных пар в localStorage
+function saveSelectedPairs() {
+    try {
+        const data = {
+            selectedPairs: selectedPairs.map(p => ({ id: p.id, symbol: p.symbol, name: p.name, category: p.category })),
+            activePairId: activePairId
+        };
+        localStorage.setItem('lynxtrade_selectedPairs', JSON.stringify(data));
+        console.log('💾 Saved selected pairs to localStorage:', data);
+    } catch (error) {
+        console.error('❌ Error saving selected pairs to localStorage:', error);
+    }
+}
+
+function loadSelectedPairs() {
+    try {
+        const saved = localStorage.getItem('lynxtrade_selectedPairs');
+        if (saved) {
+            const data = JSON.parse(saved);
+            console.log('📂 Loaded selected pairs from localStorage:', data);
+            return data;
+        }
+    } catch (error) {
+        console.error('❌ Error loading selected pairs from localStorage:', error);
+    }
+    return null;
+}
 let tradeDuration = 60; // секунды
 // Для тестирования можно установить меньшую длительность (например, 30 секунд)
 // Раскомментируйте следующую строку для тестирования:
@@ -62,10 +90,12 @@ document.addEventListener('DOMContentLoaded', () => {
 // initTradingView удалена - теперь используется chartModule
 
 function initSocket() {
-    console.log('🔌 Initializing socket connection to http://127.0.0.1:5500');
+    // Используем SOCKET_URL из config.js, если доступен, иначе window.location.origin
+    const socketUrl = window.SOCKET_URL || window.location.origin;
+    console.log('🔌 Initializing socket connection to', socketUrl);
     console.log('🔌 Socket.io version check:', typeof io !== 'undefined' ? 'loaded' : 'NOT LOADED');
     
-    socket = io(window.location.origin, {
+    socket = io(socketUrl, {
         transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionDelay: 1000,
@@ -183,15 +213,45 @@ async function loadPairs() {
         const pairs = await response.json();
         
         if (pairs.length > 0) {
-            // Ищем BTCUSDT по умолчанию, если нет - берем первую доступную пару
-            let defaultPair = pairs.find(p => p.symbol === 'BTCUSDT') || pairs[0];
+            // Пытаемся загрузить сохраненные пары из localStorage
+            const savedData = loadSelectedPairs();
+            let pairsToLoad = [];
             
-            selectedPairs = [defaultPair];
-            activePairId = defaultPair.id;
-            console.log('✅ Active pair ID set to:', activePairId, 'Symbol:', defaultPair.symbol);
+            if (savedData && savedData.selectedPairs && savedData.selectedPairs.length > 0) {
+                // Восстанавливаем сохраненные пары, проверяя, что они все еще доступны
+                savedData.selectedPairs.forEach(savedPair => {
+                    const pair = pairs.find(p => p.id === savedPair.id);
+                    if (pair) {
+                        // Объединяем сохраненные данные с актуальными данными из API
+                        pairsToLoad.push({
+                            ...pair,
+                            name: savedPair.name || pair.name,
+                            category: savedPair.category || pair.category
+                        });
+                    }
+                });
+            }
             
-            // Обновляем отображение (создаст вкладки и окна)
-            updateSelectedPair(defaultPair);
+            // Если не удалось восстановить сохраненные пары, используем дефолтную
+            if (pairsToLoad.length === 0) {
+                // Ищем BTCUSDT по умолчанию, если нет - берем первую доступную пару
+                let defaultPair = pairs.find(p => p.symbol === 'BTCUSDT') || pairs[0];
+                pairsToLoad = [defaultPair];
+            }
+            
+            selectedPairs = pairsToLoad;
+            activePairId = savedData && savedData.activePairId ? savedData.activePairId : selectedPairs[0].id;
+            
+            // Проверяем, что activePairId существует в selectedPairs
+            if (!selectedPairs.find(p => p.id === activePairId)) {
+                activePairId = selectedPairs[0].id;
+            }
+            
+            console.log('✅ Active pair ID set to:', activePairId, 'Symbol:', selectedPairs.find(p => p.id === activePairId)?.symbol);
+            console.log('✅ Loaded pairs:', selectedPairs.map(p => ({ id: p.id, symbol: p.symbol })));
+            
+            // Обновляем отображение (создаст вкладки и окна для всех выбранных пар)
+            updateSelectedPair(selectedPairs.find(p => p.id === activePairId) || selectedPairs[0]);
             
             // Инициализируем график для активного окна
             setTimeout(() => {
@@ -213,6 +273,14 @@ async function loadPairs() {
     }
 }
 
+function updateMobileV2Balance() {
+    const mobileBalance = document.getElementById('mobile-balance');
+    if (mobileBalance) {
+        const formattedBalance = userBalance.toFixed(2).replace('.', ',');
+        mobileBalance.textContent = `R$ ${formattedBalance}`;
+    }
+}
+
 async function loadBalance() {
     try {
         // Убеждаемся, что API_BASE установлен
@@ -223,6 +291,7 @@ async function loadBalance() {
         const data = await response.json();
         userBalance = data.balance;
         updateBalanceDisplay();
+        updateMobileV2Balance();
     } catch (error) {
         console.error('Error loading balance:', error);
     }
@@ -255,17 +324,53 @@ async function loadActiveRounds() {
         const UTC_OFFSET_MS = 3 * 3600 * 1000;
         
         rounds.forEach(round => {
+            // Получаем duration раунда
+            const roundDuration = round.duration || tradeDuration;
+            const periodSeconds = roundDuration;
+            const periodMinutes = periodSeconds / 60;
+            
             // Вычисляем countdownSeconds для старых раундов, если его нет
             let countdownSeconds = round.countdownSeconds;
             if (!countdownSeconds) {
-                // Для старых раундов вычисляем на основе текущего time_remaining
+                // Для старых раундов вычисляем на основе текущего time_remaining и duration раунда
                 const serverTimeSec = window.getServerTimeUTC();
                 if (!isNaN(serverTimeSec) && serverTimeSec !== null) {
-                    const secondsInCurrentMinute = serverTimeSec % 60;
-                    const timeRemaining = 60 - secondsInCurrentMinute;
-                    countdownSeconds = timeRemaining < 30 ? 60 + timeRemaining : timeRemaining;
+                    const serverDate = new Date(serverTimeSec * 1000);
+                    const currentMinutes = serverDate.getUTCMinutes();
+                    const currentSeconds = serverDate.getUTCSeconds();
+                    
+                    // Вычисляем до какой полной отметки нужно дождаться
+                    let targetMinutes;
+                    if (periodMinutes === 1) {
+                        targetMinutes = currentMinutes + 1;
+                    } else if (periodMinutes === 5) {
+                        targetMinutes = Math.ceil((currentMinutes + 1) / 5) * 5;
+                        if (targetMinutes >= 60) targetMinutes = 0;
+                    } else if (periodMinutes === 10) {
+                        targetMinutes = Math.ceil((currentMinutes + 1) / 10) * 10;
+                        if (targetMinutes >= 60) targetMinutes = 0;
+                    } else if (periodMinutes === 15) {
+                        targetMinutes = Math.ceil((currentMinutes + 1) / 15) * 15;
+                        if (targetMinutes >= 60) targetMinutes = 0;
+                    } else {
+                        targetMinutes = currentMinutes + 1;
+                    }
+                    
+                    let minutesDiff = targetMinutes - currentMinutes;
+                    if (minutesDiff <= 0) {
+                        minutesDiff += 60;
+                    }
+                    const timeRemaining = minutesDiff * 60 - currentSeconds;
+                    
+                    // Вычисляем countdownSeconds
+                    const halfPeriod = periodSeconds / 2;
+                    if (periodMinutes === 1) {
+                        countdownSeconds = timeRemaining < 30 ? 60 + timeRemaining : timeRemaining;
+                    } else {
+                        countdownSeconds = timeRemaining < halfPeriod ? periodSeconds + timeRemaining : timeRemaining;
+                    }
                 } else {
-                    countdownSeconds = 60; // Дефолтное значение
+                    countdownSeconds = periodSeconds; // Дефолтное значение
                 }
             }
             
@@ -273,7 +378,7 @@ async function loadActiveRounds() {
             const roundObj = {
                 id: round.id,
                 pair_id: round.pair_id,
-                duration: round.duration || tradeDuration,
+                duration: roundDuration,
                 amount: round.amount || tradeAmount,
                 direction: round.direction || 'BUY',
                 start_price: round.start_price,
@@ -472,10 +577,76 @@ function setupEventListeners() {
 // Хранилище окон для каждого символа
 let pairWindows = new Map(); // pairId -> { windowElement, tabElement, chartContainer }
 
+function createMobileV2Header() {
+    const tabsContainer = document.getElementById('tabs');
+    if (!tabsContainer) return;
+    
+    // Проверяем, не создан ли уже mobile-v2
+    let mobileV2 = document.getElementById('mobile-v2');
+    if (!mobileV2) {
+        // Создаем блок mobile-v2
+        mobileV2 = document.createElement('div');
+        mobileV2.id = 'mobile-v2';
+        mobileV2.setAttribute('data-v-f02899e6', '');
+        mobileV2.className = 'mobile-only';
+        
+        // Вставляем в начало tabs (перед всеми вкладками)
+        const menuIcon = document.getElementById('menuIcon');
+        if (menuIcon) {
+            tabsContainer.insertBefore(mobileV2, menuIcon.nextSibling);
+        } else {
+            tabsContainer.insertBefore(mobileV2, tabsContainer.firstChild);
+        }
+    }
+    
+    // Получаем баланс
+    const balance = userBalance || 10000.0;
+    const formattedBalance = balance.toFixed(2).replace('.', ',');
+    
+    mobileV2.innerHTML = `
+        <div data-v-f02899e6="" class="user-img">
+            <img data-v-f02899e6="" src="https://staketech.s3.us-east-1.amazonaws.com/cdn/avatars/0.jpg" alt="User">
+        </div>
+        <div data-v-f02899e6="" class="accounts">
+            <div data-v-f02899e6="">Demo Account</div>
+            <b data-v-f02899e6="" class="text-orange">
+                <div data-v-f02899e6="" class="countup-wrap text-orange">
+                    <span id="mobile-balance">R$ ${formattedBalance}</span>
+                </div>
+            </b>
+            <span data-v-f02899e6="" class="material-symbols-outlined zli expand-icon" translate="no">expand_all</span>
+        </div>
+        <div data-v-f02899e6="" class="deposit">
+            <button data-v-f02899e6="">
+                <i data-v-f02899e6="" class="fa fa-dollar"></i> Deposit
+            </button>
+        </div>
+    `;
+    
+    // Добавляем обработчик клика на accounts для открытия меню выбора пар
+    // Удаляем старые обработчики, если они есть
+    const accountsEl = mobileV2.querySelector('.accounts');
+    if (accountsEl) {
+        accountsEl.style.cursor = 'pointer';
+        // Клонируем элемент, чтобы удалить все старые обработчики
+        const newAccountsEl = accountsEl.cloneNode(true);
+        accountsEl.parentNode.replaceChild(newAccountsEl, accountsEl);
+        // Добавляем новый обработчик
+        newAccountsEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            openMobileTabs();
+        });
+    }
+}
+
 function updateSelectedPair(activePair) {
     const tabsContainer = document.getElementById('tabs');
     const windowsContainer = document.getElementById('windows');
     if (!tabsContainer || !windowsContainer) return;
+    
+    // Создаем mobile-v2 блок на мобильном
+    createMobileV2Header();
     
     // Удаляем все существующие вкладки и окна
     const existingTabs = tabsContainer.querySelectorAll('.item');
@@ -490,7 +661,13 @@ function updateSelectedPair(activePair) {
         // Создаем вкладку
         const tabElement = createTab(p);
         const addBtn = document.getElementById('addPairBtn');
-        tabsContainer.insertBefore(tabElement, addBtn);
+        const mobileV2 = document.getElementById('mobile-v2');
+        // Вставляем вкладку после mobile-v2, если он есть, иначе перед addBtn
+        if (mobileV2 && mobileV2.nextSibling) {
+            tabsContainer.insertBefore(tabElement, mobileV2.nextSibling);
+        } else {
+            tabsContainer.insertBefore(tabElement, addBtn);
+        }
         
         // Создаем окно
         const windowElement = createWindow(p);
@@ -847,14 +1024,29 @@ function createWindow(pair) {
 
 function setupRightbarHandlers(windowElement, pairId) {
     // Обработчики для expiration
+    // Фиксированные значения: 60 (1 мин), 300 (5 мин), 600 (10 мин), 900 (15 мин)
+    const durationOptions = [60, 300, 600, 900];
+    
     windowElement.querySelectorAll('.btn-expiration').forEach(btn => {
         btn.addEventListener('click', () => {
             const action = btn.getAttribute('data-action');
-            if (action === 'up') {
-                tradeDuration = Math.min(tradeDuration + 60, 3600);
-        } else {
-                tradeDuration = Math.max(tradeDuration - 60, 60);
+            
+            // Находим текущий индекс в массиве опций
+            let currentIndex = durationOptions.indexOf(tradeDuration);
+            // Если текущее значение не в списке, находим ближайшее
+            if (currentIndex === -1) {
+                currentIndex = durationOptions.findIndex(opt => opt >= tradeDuration) || 0;
             }
+            
+            if (action === 'up') {
+                // Переключаем на следующее значение по кругу
+                currentIndex = (currentIndex + 1) % durationOptions.length;
+            } else {
+                // Переключаем на предыдущее значение по кругу
+                currentIndex = (currentIndex - 1 + durationOptions.length) % durationOptions.length;
+            }
+            
+            tradeDuration = durationOptions[currentIndex];
             updateTimeDisplay(pairId);
             updateProfitDisplay(pairId);
         });
@@ -915,6 +1107,9 @@ function switchToPair(pairId) {
     
     activePairId = pairId;
     console.log(`🔀 switchToPair called, activePairId = ${activePairId}`);
+    
+    // Сохраняем активную пару
+    saveSelectedPairs();
     
     // Обновляем вкладки
     pairWindows.forEach((data, id) => {
@@ -1057,6 +1252,9 @@ function removePair(pairId) {
     if (activePairId === pairId && selectedPairs.length > 0) {
         switchToPair(selectedPairs[0].id);
     }
+    
+    // Сохраняем обновленный список пар
+    saveSelectedPairs();
 }
 
 let allAvailablePairs = [];
@@ -1202,10 +1400,23 @@ function renderPairsList(pairs) {
         if (!isSelected) {
             row.style.cursor = 'pointer';
             row.addEventListener('click', () => {
-                selectedPairs.push(pair);
+                // Находим индекс текущей активной пары
+                const activeIndex = selectedPairs.findIndex(p => p.id === activePairId);
+                
+                // Вставляем новую пару после текущей активной
+                if (activeIndex >= 0 && activeIndex < selectedPairs.length - 1) {
+                    // Вставляем после активной пары
+                    selectedPairs.splice(activeIndex + 1, 0, pair);
+                } else {
+                    // Если активная пара последняя или не найдена, добавляем в конец
+                    selectedPairs.push(pair);
+                }
+                
                 updateSelectedPair(pair);
                 switchToPair(pair.id);
                 closeAddPairModal();
+                // Сохраняем обновленный список пар
+                saveSelectedPairs();
             });
         }
         
@@ -1247,6 +1458,77 @@ function updateTimeDisplay(pairId = null) {
     if (expirationEl) {
         expirationEl.innerHTML = `<i class="fa fa-clock-o desktop-only"></i>${minutes} min.`;
     }
+    
+    // Обновляем отображение для всех окон, если нужно
+    document.querySelectorAll(`[id^="selected_expiration-"]`).forEach(el => {
+        const elPairId = el.id.replace('selected_expiration-', '');
+        if (elPairId && elPairId === String(targetPairId)) {
+            el.innerHTML = `<i class="fa fa-clock-o desktop-only"></i>${minutes} min.`;
+        }
+    });
+    
+    // Обновляем time_remaining для этой пары, чтобы пользователь видел, сколько времени будет до конца раунда
+    // Это делается через startGlobalTimeRemainingTimer, но можно вызвать обновление сразу
+    const serverTimeSec = window.getServerTimeUTC();
+    if (!isNaN(serverTimeSec) && serverTimeSec !== null) {
+        const periodSeconds = tradeDuration;
+        const periodMinutes = periodSeconds / 60;
+        const serverDate = new Date(serverTimeSec * 1000);
+        const currentMinutes = serverDate.getUTCMinutes();
+        const currentSeconds = serverDate.getUTCSeconds();
+        
+        let targetMinutes;
+        if (periodMinutes === 1) {
+            targetMinutes = currentMinutes + 1;
+        } else if (periodMinutes === 5) {
+            targetMinutes = Math.ceil((currentMinutes + 1) / 5) * 5;
+            if (targetMinutes >= 60) targetMinutes = 0;
+        } else if (periodMinutes === 10) {
+            targetMinutes = Math.ceil((currentMinutes + 1) / 10) * 10;
+            if (targetMinutes >= 60) targetMinutes = 0;
+        } else if (periodMinutes === 15) {
+            targetMinutes = Math.ceil((currentMinutes + 1) / 15) * 15;
+            if (targetMinutes >= 60) targetMinutes = 0;
+        } else {
+            targetMinutes = currentMinutes + 1;
+        }
+        
+        let minutesDiff = targetMinutes - currentMinutes;
+        if (minutesDiff <= 0) {
+            minutesDiff += 60;
+        }
+        const secondsDiff = minutesDiff * 60 - currentSeconds;
+        const remaining = secondsDiff;
+        
+        const timeElement = document.getElementById(`round-start-time-${targetPairId}`);
+        if (timeElement) {
+            const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+            const ss = String(remaining % 60).padStart(2, '0');
+            timeElement.textContent = `${mm}:${ss}`;
+            
+            // Меняем цвет в зависимости от оставшегося времени
+            if (remaining <= 10) {
+                timeElement.className = 'pull-right text-sell';
+            } else {
+                timeElement.className = 'pull-right text-buy';
+            }
+        }
+        
+        // Обновляем прогресс-бар
+        const barElement = document.getElementById(`round-bar-${targetPairId}`);
+        if (barElement) {
+            const activeRoundForPair = activeRounds.find(r => r.pair_id === targetPairId);
+            const duration = activeRoundForPair ? (activeRoundForPair.duration || periodSeconds) : periodSeconds;
+            const progress = Math.max(0, Math.min(100, (remaining / duration) * 100));
+            barElement.style.width = `${progress}%`;
+            
+            if (remaining <= 10) {
+                barElement.className = 'sc-bar-fill bg-sell';
+            } else {
+                barElement.className = 'sc-bar-fill bg-buy';
+            }
+        }
+    }
 }
 
 function updateAmountDisplay(pairId = null) {
@@ -1283,6 +1565,7 @@ function updateBalanceDisplay() {
     }
     const formatted = userBalance.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     balanceEl.textContent = `R$ ${formatted}`;
+    updateMobileV2Balance();
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1171',message:'updateBalanceDisplay exit',data:{userBalance:userBalance,formatted:formatted,textContent:balanceEl.textContent},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
     // #endregion
@@ -1417,11 +1700,46 @@ function startGlobalTimeRemainingTimer() {
         const now = serverTimeSec * 1000;
         
         // Обновляем время для всех активных пар
-        // ВСЕГДА показываем время до следующей полной минуты на основе server time
+        // Показываем время до следующей полной отметки выбранного периода
         selectedPairs.forEach(pair => {
-            // Вычисляем секунды до следующей полной минуты на основе server time
-            const secondsInCurrentMinute = serverTimeSec % 60;
-            const remaining = 60 - secondsInCurrentMinute;
+            // Получаем выбранный период (по умолчанию 60 секунд)
+            const periodSeconds = tradeDuration; // 60, 300, 600 или 900
+            const periodMinutes = periodSeconds / 60; // 1, 5, 10 или 15
+            
+            // Получаем текущее время в формате Date для работы с минутами
+            const serverDate = new Date(serverTimeSec * 1000);
+            const currentMinutes = serverDate.getUTCMinutes();
+            const currentSeconds = serverDate.getUTCSeconds();
+            
+            // Вычисляем до какой полной отметки нужно дождаться
+            let targetMinutes;
+            if (periodMinutes === 1) {
+                // 1 минута: до следующей полной минуты
+                targetMinutes = currentMinutes + 1;
+            } else if (periodMinutes === 5) {
+                // 5 минут: до следующей полной 5-минутной отметки
+                targetMinutes = Math.ceil((currentMinutes + 1) / 5) * 5;
+                if (targetMinutes >= 60) targetMinutes = 0;
+            } else if (periodMinutes === 10) {
+                // 10 минут: до следующей полной 10-минутной отметки
+                targetMinutes = Math.ceil((currentMinutes + 1) / 10) * 10;
+                if (targetMinutes >= 60) targetMinutes = 0;
+            } else if (periodMinutes === 15) {
+                // 15 минут: до следующей полной 15-минутной отметки
+                targetMinutes = Math.ceil((currentMinutes + 1) / 15) * 15;
+                if (targetMinutes >= 60) targetMinutes = 0;
+            } else {
+                // Fallback: используем текущую логику для 1 минуты
+                targetMinutes = currentMinutes + 1;
+            }
+            
+            // Вычисляем разницу в минутах и секундах
+            let minutesDiff = targetMinutes - currentMinutes;
+            if (minutesDiff <= 0) {
+                minutesDiff += 60; // Переход через час
+            }
+            const secondsDiff = minutesDiff * 60 - currentSeconds;
+            const remaining = secondsDiff;
             
             // Находим активный раунд для этой пары (для обновления цвета линии ордера)
             const activeRoundForPair = activeRounds.find(r => r.pair_id === pair.id);
@@ -1484,7 +1802,7 @@ async function createRound(direction, pairId = null) {
         return;
     }
     
-    // Вычисляем time_remaining (секунды до следующей полной минуты)
+    // Вычисляем time_remaining до следующей полной отметки выбранного периода
     const serverTimeSec = window.getServerTimeUTC();
     if (isNaN(serverTimeSec) || serverTimeSec === null) {
         console.error('❌ [createRound] Server time not available');
@@ -1492,15 +1810,62 @@ async function createRound(direction, pairId = null) {
         return;
     }
     
-    const secondsInCurrentMinute = serverTimeSec % 60;
-    const timeRemaining = 60 - secondsInCurrentMinute;
+    // Определяем период в секундах и минутах
+    const periodSeconds = tradeDuration; // 60, 300, 600 или 900
+    const periodMinutes = periodSeconds / 60; // 1, 5, 10 или 15
+    
+    // Получаем текущее время в формате Date для работы с минутами
+    const serverDate = new Date(serverTimeSec * 1000);
+    const currentMinutes = serverDate.getUTCMinutes();
+    const currentSeconds = serverDate.getUTCSeconds();
+    
+    // Вычисляем до какой полной отметки нужно дождаться
+    let targetMinutes;
+    if (periodMinutes === 1) {
+        // 1 минута: до следующей полной минуты
+        targetMinutes = currentMinutes + 1;
+    } else if (periodMinutes === 5) {
+        // 5 минут: до следующей полной 5-минутной отметки (0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55)
+        targetMinutes = Math.ceil((currentMinutes + 1) / 5) * 5;
+        if (targetMinutes >= 60) targetMinutes = 0;
+    } else if (periodMinutes === 10) {
+        // 10 минут: до следующей полной 10-минутной отметки (0, 10, 20, 30, 40, 50)
+        targetMinutes = Math.ceil((currentMinutes + 1) / 10) * 10;
+        if (targetMinutes >= 60) targetMinutes = 0;
+    } else if (periodMinutes === 15) {
+        // 15 минут: до следующей полной 15-минутной отметки (0, 15, 30, 45)
+        targetMinutes = Math.ceil((currentMinutes + 1) / 15) * 15;
+        if (targetMinutes >= 60) targetMinutes = 0;
+    } else {
+        // Fallback: используем текущую логику для 1 минуты
+        targetMinutes = currentMinutes + 1;
+    }
+    
+    // Вычисляем разницу в минутах и секундах
+    let minutesDiff = targetMinutes - currentMinutes;
+    if (minutesDiff <= 0) {
+        minutesDiff += 60; // Переход через час
+    }
+    const secondsDiff = minutesDiff * 60 - currentSeconds;
+    const timeRemaining = secondsDiff;
     
     // Вычисляем время обратного отсчета согласно новой логике
     let countdownSeconds;
-    if (timeRemaining < 30) {
-        countdownSeconds = 60 + timeRemaining;
+    const halfPeriod = periodSeconds / 2;
+    if (periodMinutes === 1) {
+        // Для 1 минуты: логика с 30 секундами
+        if (timeRemaining < 30) {
+            countdownSeconds = 60 + timeRemaining;
+        } else {
+            countdownSeconds = timeRemaining;
+        }
     } else {
-        countdownSeconds = timeRemaining;
+        // Для 5/10/15 минут: если time_remaining < половины периода, то countdown = период + time_remaining
+        if (timeRemaining < halfPeriod) {
+            countdownSeconds = periodSeconds + timeRemaining;
+        } else {
+            countdownSeconds = timeRemaining;
+        }
     }
     
     console.log(`⏱️ [createRound] time_remaining: ${timeRemaining}s, countdown: ${countdownSeconds}s`);
@@ -1603,13 +1968,15 @@ function addActiveRound(roundData, direction) {
     // Используем новую логику с countdownSeconds
     const countdownSeconds = roundData.countdownSeconds || 60; // По умолчанию 60 секунд, если не указано
     const startCountdownTime = roundData.startCountdownTime || Date.now();
+    // Используем duration из roundData, если есть, иначе из tradeDuration
+    const roundDuration = roundData.duration || tradeDuration;
     
     const round = {
         id: roundData.id,
         pair_id: roundData.pair_id || activePairId || 1,
         direction: direction,
         amount: roundData.amount || tradeAmount,
-        duration: tradeDuration,
+        duration: roundDuration,
         start_price: roundData.start_price,
         countdownSeconds: countdownSeconds,
         startCountdownTime: startCountdownTime,
@@ -1832,6 +2199,7 @@ async function finishRoundOnClient(round) {
         // 4. Обновляем UI
         userBalance = newBalance;
         updateBalanceDisplay();
+        updateMobileV2Balance();
         
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1678',message:'after balance update',data:{roundId:round.id,userBalance:userBalance},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
@@ -1932,6 +2300,7 @@ function handleRoundFinished(data) {
     if (data.new_balance !== undefined && data.new_balance !== null) {
         userBalance = data.new_balance;
         updateBalanceDisplay();
+        updateMobileV2Balance();
     } else {
         console.warn(`⚠️ [handleRoundFinished] new_balance is missing, reloading balance from server`);
         loadBalance();
@@ -2249,6 +2618,9 @@ function openMobileTabs() {
     content.appendChild(addItem);
     
     mobileTabs.style.display = 'block';
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2334',message:'openMobileTabs: setting display block',data:{display:mobileTabs.style.display,selectedPairsCount:selectedPairs.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
 }
 
 function closeMobileTabs() {
@@ -2268,8 +2640,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // Обработчик клика на мобильный аккаунт
     const accountDetails = document.getElementById('account_details');
     if (accountDetails) {
-        accountDetails.addEventListener('click', () => {
-            openMobileTabs();
+        accountDetails.style.cursor = 'pointer';
+        accountDetails.style.pointerEvents = 'auto';
+        // Используем делегирование событий на document для надежности
+        document.addEventListener('click', function accountDetailsClickHandler(e) {
+            if (e.target.closest('#account_details')) {
+                e.stopPropagation();
+                e.preventDefault();
+                openMobileTabs();
+            }
         });
     }
     

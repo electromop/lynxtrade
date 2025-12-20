@@ -346,8 +346,8 @@ body {
     flex: 0 0 auto;
     padding: 0;
     margin: 0;
-    max-width: 40px;
-    max-height: 40px;
+    max-width: 50px;
+    max-height: 50px;
     text-align: center;
     cursor: pointer;
 }
@@ -1345,6 +1345,32 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
 }
 
 @media (max-width: 500px) {
+    /* Скрыть левый тулбар графика на мобильном */
+    .chart-left-toolbar {
+        display: none !important;
+    }
+    
+    /* Скрыть OHLC на мобильном */
+    [id^="candleInfo-"] {
+        display: none !important;
+    }
+    
+    /* Скрыть элементы на мобильном */
+    #header #tabs .icon-item.btn-deposit-mobile,
+    #header #tabs #addPairBtn {
+        display: none !important;
+    }
+    
+    #header #tabs .item.active {
+        display: none !important;
+    }
+    #header #tabs .item[data-pair-id] {
+        display: none !important;
+    }
+    #header #tabs #menuIcon {
+        display: none !important;
+    }
+
     #app-container #window .chart,
     #app-container section[id^="window_"] .chart {
         height: calc(100% - 220px);
@@ -1357,6 +1383,99 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
         padding: 3px 5px;
         background: #000000;
         z-index: 1000;
+    }
+    
+    /* Mobile-v2 header styles */
+    #mobile-v2 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 0px 10px 5px;
+        width: 100%;
+    }
+    
+    #mobile-v2 .user-img {
+        flex-shrink: 0;
+        margin-left: 0;
+    }
+    
+    #mobile-v2 .user-img img {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        object-position: center;
+    }
+    
+    #mobile-v2 .accounts {
+        width: 40%;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        position: relative;
+        padding: 8px 12px;
+        background: #ffffff1f;
+        border-radius: 8px;
+    }
+    
+    #mobile-v2 .accounts > div:first-child {
+        color: #ffffff7d;
+        font-size: 11px;
+        font-weight: 500;
+    }
+    
+    #mobile-v2 .accounts .countup-wrap {
+        color: #ff9800;
+        font-size: 16px;
+        /* font-weight: 600; */
+    }
+    
+    #mobile-v2 .accounts .expand-icon {
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #ffffff4d;
+        font-size: 17px;
+    }
+    
+    #mobile-v2 .deposit {
+        width: 33%;
+        flex-shrink: 0;
+    }
+    
+    /* #mobile-v2 .deposit button {
+        background: #08b774;
+        color: #fff;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        white-space: nowrap;
+        width: 100%;
+    } */
+
+    #mobile-v2 .deposit button {
+        border: 0;
+        width: 100%;
+        box-sizing: border-box!important;
+        background: #08b774;
+        padding: 14px 10px;
+        color: #fff;
+        font-size: 16px;
+        text-transform: uppercase;
+        font-weight: 500;
+        border-radius: 5px;
+    }
+    
+    #mobile-v2 .deposit button i {
+        font-size: 14px;
     }
 
     #window #rightbar .rb-profit,
@@ -1463,6 +1582,11 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
         height: 50px;
         min-height: 50px;
         padding: 0 15px;
+    }
+
+    #window #rightbar .rb-trade-buttons button .mobile-profit,
+    section[id^="window_"] #rightbar .rb-trade-buttons button .mobile-profit {
+        display: block !important;
     }
 
     #window #rightbar .rb-trade-buttons button.btn-trade-buy,
@@ -2038,9 +2162,10 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
 }
 
 #mobile-tabs .item.add {
-    justify-content: center;
+    justify-content: left;
     color: #fff;
     border-bottom: none;
+    padding: 5px 15px 5px 23px;
 }
 
 #mobile-tabs .item.add i {

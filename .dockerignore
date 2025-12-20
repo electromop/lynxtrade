@@ -9,13 +9,10 @@ venv/
 ENV/
 .venv
 
-# База данных
+# Database
 *.db
 *.sqlite
 *.sqlite3
-database/*.db
-database/*.sqlite
-database/*.sqlite3
 
 # IDE
 .vscode/
@@ -24,22 +21,23 @@ database/*.sqlite3
 *.swo
 *~
 
-# OS
-.DS_Store
-Thumbs.db
-
 # Git
 .git/
 .gitignore
 
-# Документация
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
 README.md
 *.md
 
-# Временные файлы
-*.log
-*.tmp
+# Test files
+test
+*.backup
 
-# Downloads (если есть ссылки)
-Downloads/
-
+# OS
+.DS_Store
+Thumbs.db

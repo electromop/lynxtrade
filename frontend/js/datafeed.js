@@ -1,9 +1,11 @@
 // UDF Datafeed для TradingView
 // Адаптирован для работы с нашим бэкенд API
 
-// Глобальная константа для API (объявляется здесь, так как это первый загружаемый файл)
+// Глобальная константа для API (устанавливается в config.js)
+// Если config.js не загружен, используем fallback
 if (!window.API_BASE) {
     window.API_BASE = window.location.origin + '/api';
+    console.warn('⚠️ [Datafeed] API_BASE не установлен в config.js, используется fallback:', window.API_BASE);
 }
 
 class UDFDatafeed {
