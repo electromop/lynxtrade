@@ -29,8 +29,11 @@ def calculate_profit(amount, win_rate_percent):
     profit_percent = 0.85
     return amount * profit_percent
 
-def check_and_finish_rounds(socketio):
+def check_and_finish_rounds(socketio, app=None):
     """Проверить и завершить истекшие раунды"""
+    from app import app as flask_app
+    app = app or flask_app
+    
     conn = get_db()
     cursor = conn.cursor()
     
@@ -45,6 +48,9 @@ def check_and_finish_rounds(socketio):
     ''', (now,))
     
     finished_rounds = cursor.fetchall()
+    
+    if finished_rounds:
+        print(f'🔄 [check_and_finish_rounds] Found {len(finished_rounds)} finished round(s)')
     
     win_rate = get_win_rate()
     
@@ -94,10 +100,11 @@ def check_and_finish_rounds(socketio):
         
         conn.commit()
         
-        # Отправляем событие через WebSocket
-        socketio.emit('round_finished', {
+        # Подготавливаем данные для отправки
+        round_finished_data = {
             'round_id': round_id,
             'user_id': user_id,
+            'pair_id': pair_id,
             'win': win,
             'profit': profit,
             'amount': amount,
@@ -107,7 +114,14 @@ def check_and_finish_rounds(socketio):
             'start_price': start_price,
             'end_price': end_price,
             'new_balance': new_balance
-        }, room=None)  # Отправляем всем подключенным клиентам
+        }
+        
+        print(f'📤 [check_and_finish_rounds] Emitting round_finished for round {round_id}:', round_finished_data)
+        
+        # Отправляем событие через WebSocket с правильным контекстом
+        with app.app_context():
+            socketio.emit('round_finished', round_finished_data, room=None)
+            print(f'✅ [check_and_finish_rounds] Event emitted for round {round_id}')
     
     conn.close()
 

@@ -104,15 +104,19 @@ def emit_price_updates():
             traceback.print_exc()
             socketio.sleep(5)
 
-def check_rounds_periodically():
-    """Периодическая проверка и завершение раундов"""
-    while True:
-        try:
-            check_and_finish_rounds(socketio)
-            socketio.sleep(1)  # Проверяем каждую секунду
-        except Exception as e:
-            print(f'Error checking rounds: {e}')
-            socketio.sleep(1)
+# Функция check_rounds_periodically отключена - теперь раунды завершаются на клиенте
+# def check_rounds_periodically():
+#     """Периодическая проверка и завершение раундов"""
+#     while True:
+#         try:
+#             with app.app_context():
+#                 check_and_finish_rounds(socketio, app)
+#             socketio.sleep(1)  # Проверяем каждую секунду
+#         except Exception as e:
+#             print(f'❌ Error checking rounds: {e}')
+#             import traceback
+#             traceback.print_exc()
+#             socketio.sleep(1)
 
 def start_background_tasks():
     """Запуск фоновых задач используя socketio.start_background_task"""
@@ -120,8 +124,9 @@ def start_background_tasks():
         # Используем socketio.start_background_task для правильной работы с Flask-SocketIO
         print('🔄 Starting emit_server_time task...')
         socketio.start_background_task(emit_server_time)
-        print('🔄 Starting check_rounds_periodically task...')
-        socketio.start_background_task(check_rounds_periodically)
+        # check_rounds_periodically отключен - раунды завершаются на клиенте
+        # print('🔄 Starting check_rounds_periodically task...')
+        # socketio.start_background_task(check_rounds_periodically)
         print('🔄 Starting emit_price_updates task...')
         socketio.start_background_task(emit_price_updates)
         print('✅ All background tasks started using socketio.start_background_task')

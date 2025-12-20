@@ -15,6 +15,12 @@ let roundTimers = new Map(); // roundId -> intervalId для хранения т
 let userBalance = 10000.0;
 let tradeAmount = 5.0;
 let tradeDuration = 60; // секунды
+// Для тестирования можно установить меньшую длительность (например, 30 секунд)
+// Раскомментируйте следующую строку для тестирования:
+// tradeDuration = 30; // секунды для тестирования
+// Для тестирования можно установить меньшую длительность (например, 30 секунд)
+// Раскомментируйте следующую строку для тестирования:
+// tradeDuration = 30; // секунды для тестирования
 // currentTimeframe объявлен в chart.js
 
 // Хранение времени сервера (UTC) в секундах (Unix timestamp)
@@ -153,9 +159,10 @@ function initSocket() {
         }
     });
     
-    socket.on('round_finished', (data) => {
-        handleRoundFinished(data);
-    });
+    // Обработчик round_finished удален - теперь используем клиентскую логику finishRoundOnClient
+    // socket.on('round_finished', (data) => {
+    //     handleRoundFinished(data);
+    // });
     
     socket.on('round_update', (data) => {
         updateRoundTime(data);
@@ -231,8 +238,8 @@ async function loadActiveRounds() {
         console.log('📋 Fetching active rounds from:', url);
         const response = await fetch(url);
         const rounds = await response.json();
-        activeRounds = rounds;
-        updateActiveRoundsDisplay();
+        // Очищаем activeRounds - они будут заполнены в цикле ниже
+        activeRounds = [];
         
         console.log(`📋 Loaded ${rounds.length} active rounds:`, rounds.map(r => ({ id: r.id, pair_id: r.pair_id, end_time: r.end_time, duration: r.duration })));
         
@@ -242,57 +249,55 @@ async function loadActiveRounds() {
         });
         roundTimers.clear();
         
-        // Запускаем таймеры для всех активных раундов
+        // Проверяем истекшие раунды перед запуском таймеров
+        const serverTimeSec = window.getServerTimeUTC();
+        const now = serverTimeSec * 1000;
+        const UTC_OFFSET_MS = 3 * 3600 * 1000;
+        
         rounds.forEach(round => {
-            if (round.end_time) {
-                // Создаем объект раунда с правильной структурой
-                const roundObj = {
-                    id: round.id,
-                    pair_id: round.pair_id,
-                    end_time: round.end_time,
-                    duration: round.duration || tradeDuration,
-                };
-                startRoundTimer(roundObj);
+            // Вычисляем countdownSeconds для старых раундов, если его нет
+            let countdownSeconds = round.countdownSeconds;
+            if (!countdownSeconds) {
+                // Для старых раундов вычисляем на основе текущего time_remaining
+                const serverTimeSec = window.getServerTimeUTC();
+                if (!isNaN(serverTimeSec) && serverTimeSec !== null) {
+                    const secondsInCurrentMinute = serverTimeSec % 60;
+                    const timeRemaining = 60 - secondsInCurrentMinute;
+                    countdownSeconds = timeRemaining < 30 ? 60 + timeRemaining : timeRemaining;
+                } else {
+                    countdownSeconds = 60; // Дефолтное значение
+                }
             }
+            
+            // Создаем объект раунда с правильной структурой
+            const roundObj = {
+                id: round.id,
+                pair_id: round.pair_id,
+                duration: round.duration || tradeDuration,
+                amount: round.amount || tradeAmount,
+                direction: round.direction || 'BUY',
+                start_price: round.start_price,
+                countdownSeconds: countdownSeconds,
+                startCountdownTime: Date.now() // Используем текущее время как старт
+            };
+            
+            // Добавляем раунд в activeRounds
+            activeRounds.push(roundObj);
+            
+            // Запускаем таймер
+            startRoundTimer(roundObj);
         });
         
-        // Сразу обновляем время для активной пары, если есть активный раунд
-        if (activePairId) {
-            const activeRound = rounds.find(r => r.pair_id === activePairId && r.end_time);
-            if (activeRound) {
-                // ВСЕГДА используем серверное время
-                const serverTimeSec = window.getServerTimeUTC();
-                const now = serverTimeSec * 1000;
-                
-                let endTime;
-                if (typeof activeRound.end_time === 'string') {
-                    endTime = new Date(activeRound.end_time).getTime();
-                } else if (typeof activeRound.end_time === 'number') {
-                    if (activeRound.end_time < 1e10) {
-                        endTime = activeRound.end_time * 1000;
-                    } else {
-                        endTime = activeRound.end_time;
-                    }
-                } else {
-                    endTime = activeRound.end_time;
-                }
-                
-                if (!isNaN(serverTimeSec)) {
-                    // Вычисляем время до полной минуты (секунды до следующей минуты)
-                    const secondsInCurrentMinute = serverTimeSec % 60;
-                    const remaining = 60 - secondsInCurrentMinute;
-                    updateRoundTimeRemaining(activeRound.id, remaining, activePairId, activeRound.duration || tradeDuration);
-                }
-            }
-        }
+        // Обновляем отображение активных раундов
+        updateActiveRoundsDisplay();
         
         // Рисуем ордера на графике для всех активных раундов
         // Используем небольшую задержку, чтобы график успел инициализироваться
         setTimeout(() => {
-            rounds.forEach(round => {
+            activeRounds.forEach(round => {
                 if (round.start_price && round.pair_id && window.chartModule && window.chartModule.drawOrderLine) {
-                    const orderTime = round.start_time ? new Date(round.start_time).getTime() / 1000 : Math.floor(Date.now() / 1000);
-                    const endTime = round.end_time || null;
+                    const orderTime = Date.now() / 1000; // Используем текущее время
+                    const countdownSeconds = round.countdownSeconds || 60;
                     const amount = round.amount || 0;
                     const direction = round.direction || 'BUY';
                     window.chartModule.drawOrderLine(
@@ -301,7 +306,7 @@ async function loadActiveRounds() {
                         round.id.toString(),
                         direction,
                         orderTime,
-                        endTime,
+                        countdownSeconds, // Передаем countdownSeconds вместо endTime
                         amount
                     );
                 }
@@ -340,7 +345,62 @@ setInterval(async () => {
                     pair_id: round.pair_id,
                     end_time: round.end_time,
                     start_price: round.start_price,
+                    amount: round.amount || tradeAmount, // Сохраняем amount из сервера
                 }, round.direction);
+            }
+        });
+        
+        // Проверяем истекшие раунды на клиенте
+        const serverTimeSec = window.getServerTimeUTC();
+        const now = serverTimeSec * 1000;
+        
+        activeRounds.forEach(round => {
+            let endTimeUTC = null;
+            if (typeof round.end_time === 'string') {
+                endTimeUTC = new Date(round.end_time).getTime();
+                if (isNaN(endTimeUTC)) {
+                    const isoString = round.end_time.replace(' ', 'T');
+                    endTimeUTC = new Date(isoString).getTime();
+                }
+                if (isNaN(endTimeUTC)) {
+                    endTimeUTC = new Date(round.end_time + 'Z').getTime();
+                }
+            } else if (typeof round.end_time === 'number') {
+                if (round.end_time < 1e10) {
+                    endTimeUTC = round.end_time * 1000;
+                } else {
+                    endTimeUTC = round.end_time;
+                }
+            } else {
+                endTimeUTC = round.end_time;
+            }
+            
+            // Конвертируем endTime из UTC в UTC-3 (вычитаем 3 часа)
+            const UTC_OFFSET_MS = 3 * 3600 * 1000;
+            const endTime = endTimeUTC ? endTimeUTC - UTC_OFFSET_MS : null;
+            
+            // Если время истекло, завершаем раунд на клиенте
+            // НО: проверяем, не завершен ли уже раунд в startRoundTimer
+            // Если таймер для этого раунда еще активен, не завершаем здесь (пусть startRoundTimer завершит)
+            if (!isNaN(endTime) && endTime > 0 && now >= endTime) {
+                // Проверяем, есть ли активный таймер для этого раунда
+                // #region agent log
+                const timerExists = roundTimers.has(round.id);
+                const roundTimersKeys = Array.from(roundTimers.keys());
+                fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:429',message:'periodic update checking timer',data:{roundId:round.id,roundIdType:typeof round.id,now:now,endTime:endTime,timeDiff:now-endTime,timerExists:timerExists,roundTimersKeys:roundTimersKeys,roundTimersSize:roundTimers.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
+                if (timerExists) {
+                    // Таймер активен, пусть startRoundTimer завершит раунд
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:437',message:'periodic update round expired but timer active',data:{roundId:round.id,now:now,endTime:endTime,timeDiff:now-endTime,timerExists:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
+                    return; // Не завершаем здесь, пусть startRoundTimer завершит
+                }
+                console.log(`⏰ [periodic update] Round ${round.id} expired, finishing on client (no active timer)`);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:442',message:'periodic update round expired',data:{roundId:round.id,now:now,endTime:endTime,timeDiff:now-endTime,timerExists:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
+                finishRoundOnClient(round);
             }
         });
         
@@ -445,6 +505,9 @@ function updateSelectedPair(activePair) {
         
         // Инициализируем график для этого окна
         initChartForWindow(p.id, windowElement);
+        
+        // Обновляем вкладку для отображения результата раунда, если есть
+        updateTabForRound(p.id);
     });
     
     // Активируем выбранную пару
@@ -456,6 +519,51 @@ function updateSelectedPair(activePair) {
 }
 
 // Маппинг символов на URL иконок из файла test
+// OTC символы (используют /otc/ в пути)
+const OTC_SYMBOL_ICON_MAP = {
+    'EURUSD': 'https://zlincontent.com/cdn/icons/symbols/otc/eurusd.png',
+    'EURGBP': 'https://zlincontent.com/cdn/icons/symbols/otc/eurgbp.png',
+    'XAUUSD': 'https://zlincontent.com/cdn/icons/symbols/otc/xauusd.png',
+    'AAPL': 'https://zlincontent.com/cdn/icons/symbols/otc/aapl2.png',
+    'NFLX': 'https://zlincontent.com/cdn/icons/symbols/otc/nflx.png',
+    'META': 'https://zlincontent.com/cdn/icons/symbols/otc/meta.png',
+    'TSLA': 'https://zlincontent.com/cdn/icons/symbols/otc/tsla.png',
+    'MSFT': 'https://zlincontent.com/cdn/icons/symbols/otc/msft.png',
+    'EURJPY': 'https://zlincontent.com/cdn/icons/symbols/otc/eurjpy.png',
+    'AMZN': 'https://zlincontent.com/cdn/icons/symbols/otc/amzn.png',
+    'STARBUCKS': 'https://zlincontent.com/cdn/icons/symbols/otc/starbucks.png',
+    'MASTERCARD': 'https://zlincontent.com/cdn/icons/symbols/otc/mastercard.png',
+    'VISA': 'https://zlincontent.com/cdn/icons/symbols/otc/visa.png',
+    'IBM': 'https://zlincontent.com/cdn/icons/symbols/otc/ibm.png',
+    'COKE': 'https://zlincontent.com/cdn/icons/symbols/otc/coke.png',
+    'SPOTIFY': 'https://zlincontent.com/cdn/icons/symbols/otc/spotify.png',
+    'NIKE': 'https://zlincontent.com/cdn/icons/symbols/otc/nike.png',
+    'INTEL': 'https://zlincontent.com/cdn/icons/symbols/otc/intel.png',
+    // OTC версии криптовалют
+    'BTC': 'https://zlincontent.com/cdn/icons/symbols/otc/bitcoin.png',
+    'LTC': 'https://zlincontent.com/cdn/icons/symbols/otc/litecoin.png',
+    'BNB': 'https://zlincontent.com/cdn/icons/symbols/otc/bnb.png',
+    'ETH': 'https://zlincontent.com/cdn/icons/symbols/otc/ethereum.png',
+    'SOL': 'https://zlincontent.com/cdn/icons/symbols/otc/solana.png',
+    'AVAX': 'https://zlincontent.com/cdn/icons/symbols/otc/avax.png',
+    'SUI': 'https://zlincontent.com/cdn/icons/symbols/otc/sui.png',
+    'LINK': 'https://zlincontent.com/cdn/icons/symbols/otc/link.png',
+    'XPL': 'https://zlincontent.com/cdn/icons/symbols/otc/xpl.png',
+    'ADAUSDT': 'https://zlincontent.com/cdn/icons/symbols/otc/adausdt.png',
+    'AUDJPY': 'https://zlincontent.com/cdn/icons/symbols/otc/audjpy.png',
+    'EURAUD': 'https://zlincontent.com/cdn/icons/symbols/otc/euraud.png',
+    'AUDCHF': 'https://zlincontent.com/cdn/icons/symbols/otc/audchf.png',
+    'GBPJPY': 'https://zlincontent.com/cdn/icons/symbols/otc/gbpjpy.png',
+    'CADCHF': 'https://zlincontent.com/cdn/icons/symbols/otc/cadchf.png',
+    'GBPAUD': 'https://zlincontent.com/cdn/icons/symbols/otc/gbpaud.png',
+    'NZDJPY': 'https://zlincontent.com/cdn/icons/symbols/otc/nzdjpy.png',
+    'GBPCHF': 'https://zlincontent.com/cdn/icons/symbols/otc/gbpchf.png',
+    'USDCHF': 'https://zlincontent.com/cdn/icons/symbols/otc/usdchf.png',
+    'EURCAD': 'https://zlincontent.com/cdn/icons/symbols/otc/eurcad.png',
+    'EURCHF': 'https://zlincontent.com/cdn/icons/symbols/otc/eurchf.png',
+};
+
+// Обычные символы (без /otc/)
 const SYMBOL_ICON_MAP = {
     'BTCUSDT': 'https://zlincontent.com/cdn/icons/symbols/bitcoin.png',
     'BTCUSD': 'https://zlincontent.com/cdn/icons/symbols/btcusd.png',
@@ -463,9 +571,6 @@ const SYMBOL_ICON_MAP = {
     'BNBUSDT': 'https://zlincontent.com/cdn/icons/symbols/bnb.png',
     'ADAUSDT': 'https://zlincontent.com/cdn/icons/symbols/adausdt.png',
     'AUDJPY': 'https://zlincontent.com/cdn/icons/symbols/audjpy.png',
-    'EURUSD': 'https://zlincontent.com/cdn/icons/symbols/otc/eurusd.png',
-    'EURGBP': 'https://zlincontent.com/cdn/icons/symbols/otc/eurgbp.png',
-    'XAUUSD': 'https://zlincontent.com/cdn/icons/symbols/otc/xauusd.png',
     'GBPUSD': 'https://zlincontent.com/cdn/icons/symbols/gbpusd.png',
     'AUDCAD': 'https://zlincontent.com/cdn/icons/symbols/audcad.png',
     'USDCAD': 'https://zlincontent.com/cdn/icons/symbols/usdcad.png',
@@ -474,10 +579,12 @@ const SYMBOL_ICON_MAP = {
     'CADJPY': 'https://zlincontent.com/cdn/icons/symbols/cadjpy.png',
     'CHFJPY': 'https://zlincontent.com/cdn/icons/symbols/chfjpy.png',
     'XRPUSDT': 'https://zlincontent.com/cdn/icons/symbols/xrp.png',
+    'XRP': 'https://zlincontent.com/cdn/icons/symbols/xrp.png',
     'ETHUSDT': 'https://zlincontent.com/cdn/icons/symbols/ethereum.png',
     'SOLUSDT': 'https://zlincontent.com/cdn/icons/symbols/solana.png',
     'AVAXUSDT': 'https://zlincontent.com/cdn/icons/symbols/avax.png',
     'DOGEUSDT': 'https://zlincontent.com/cdn/icons/symbols/doge.png',
+    'DOGE': 'https://zlincontent.com/cdn/icons/symbols/doge.png',
     'EURNZD': 'https://zlincontent.com/cdn/icons/symbols/eurnzd.png',
     'AUDCHF': 'https://zlincontent.com/cdn/icons/symbols/audchf.png',
     'EURAUD': 'https://zlincontent.com/cdn/icons/symbols/euraud.png',
@@ -493,37 +600,134 @@ const SYMBOL_ICON_MAP = {
     'XPLUSDT': 'https://zlincontent.com/cdn/icons/symbols/xpl.png',
     'EURCAD': 'https://zlincontent.com/cdn/icons/symbols/eurcad.png',
     'XLMUSDT': 'https://zlincontent.com/cdn/icons/symbols/xlm.png',
+    'XLM': 'https://zlincontent.com/cdn/icons/symbols/xlm.png',
     'AUDNZD': 'https://zlincontent.com/cdn/icons/symbols/audnzd.png',
     'AUDUSD': 'https://zlincontent.com/cdn/icons/symbols/audusd.png',
     'NZDCHF': 'https://zlincontent.com/cdn/icons/symbols/nzdchf.png',
     'GBPCAD': 'https://zlincontent.com/cdn/icons/symbols/gbpcad.png',
     'GBPNZD': 'https://zlincontent.com/cdn/icons/symbols/gbpnzd.png',
     'NZDCAD': 'https://zlincontent.com/cdn/icons/symbols/nzdcad.png',
+    'COPPER': 'https://zlincontent.com/cdn/icons/symbols/copper.png',
+    'BRENTOIL': 'https://zlincontent.com/cdn/icons/symbols/brent-oil.png',
+    'BRENT-OIL': 'https://zlincontent.com/cdn/icons/symbols/brent-oil.png',
+    'SILVER': 'https://zlincontent.com/cdn/icons/symbols/silver.png',
 };
 
-function getIconUrl(symbol) {
+function getIconUrl(symbol, category = null) {
     const upperSymbol = symbol.toUpperCase();
+    
+    // Если категория указана и это OTC, используем OTC маппинг
+    if (category && (category.toLowerCase() === 'otc' || category.toLowerCase() === 'forex')) {
+        // Проверяем OTC маппинг
+        if (OTC_SYMBOL_ICON_MAP[upperSymbol]) {
+            return OTC_SYMBOL_ICON_MAP[upperSymbol];
+        }
+        // Для OTC криптовалют извлекаем базовый актив
+        if (upperSymbol.endsWith('USDT')) {
+            const baseAsset = upperSymbol.replace('USDT', '');
+            if (OTC_SYMBOL_ICON_MAP[baseAsset]) {
+                return OTC_SYMBOL_ICON_MAP[baseAsset];
+            }
+        }
+    }
+    
+    // Проверяем обычный маппинг
     if (SYMBOL_ICON_MAP[upperSymbol]) {
         return SYMBOL_ICON_MAP[upperSymbol];
     }
-    // Fallback для символов с /otc/ или других путей
-    if (upperSymbol.includes('BTC') && !upperSymbol.includes('USDT')) {
-        return 'https://zlincontent.com/cdn/icons/symbols/otc/bitcoin.png';
+    
+    // Для криптовалют извлекаем базовый актив
+    if (upperSymbol.endsWith('USDT')) {
+        const baseAsset = upperSymbol.replace('USDT', '');
+        // Проверяем OTC маппинг для базового актива
+        if (OTC_SYMBOL_ICON_MAP[baseAsset]) {
+            return OTC_SYMBOL_ICON_MAP[baseAsset];
+        }
+        // Проверяем обычный маппинг для базового актива
+        if (SYMBOL_ICON_MAP[baseAsset]) {
+            return SYMBOL_ICON_MAP[baseAsset];
+        }
     }
-    if (upperSymbol.includes('LTC')) {
-        return 'https://zlincontent.com/cdn/icons/symbols/otc/litecoin.png';
+    
+    // Fallback: пробуем найти в OTC маппинге
+    if (OTC_SYMBOL_ICON_MAP[upperSymbol]) {
+        return OTC_SYMBOL_ICON_MAP[upperSymbol];
     }
-    if (upperSymbol.includes('ETH')) {
-        return 'https://zlincontent.com/cdn/icons/symbols/otc/ethereum.png';
-    }
-    if (upperSymbol.includes('SOL')) {
-        return 'https://zlincontent.com/cdn/icons/symbols/otc/solana.png';
-    }
-    if (upperSymbol.includes('AVAX')) {
-        return 'https://zlincontent.com/cdn/icons/symbols/otc/avax.png';
-    }
+    
     // Общий fallback
     return `https://zlincontent.com/cdn/icons/symbols/${symbol.toLowerCase()}.png`;
+}
+
+// Хранилище завершенных раундов для отображения на вкладках
+let finishedRounds = new Map(); // pairId -> { win, profit }
+
+function updateTabForRound(pairId, roundData = null) {
+    // Находим вкладку для этой пары
+    const tab = document.querySelector(`.item[data-pair-id="${pairId}"]`);
+    if (!tab) return;
+    
+    const descriptionEl = tab.querySelector('.description[data-v-f02899e6]');
+    if (!descriptionEl) return;
+    
+    // Если передан roundData, сохраняем его
+    if (roundData) {
+        finishedRounds.set(pairId, roundData);
+    } else {
+        // Ищем в сохраненных завершенных раундах
+        roundData = finishedRounds.get(pairId);
+    }
+    
+    // Проверяем активный раунд
+    const activeRound = activeRounds.find(r => r.pair_id === pairId);
+    
+    if (roundData) {
+        // Есть завершенный раунд - показываем результат
+        const isWin = roundData.win && roundData.profit > 0;
+        const profitValue = Math.abs(roundData.profit);
+        const formattedProfit = profitValue.toFixed(2).replace('.', ',');
+        
+        // Добавляем/удаляем классы
+        tab.classList.remove('loosing', 'winning');
+        tab.classList.add(isWin ? 'winning' : 'loosing');
+        
+        // Обновляем description
+        descriptionEl.textContent = isWin ? `R$ ${formattedProfit}` : `R$ -${formattedProfit}`;
+    } else if (activeRound) {
+        // Есть активный раунд - показываем потенциальный выигрыш в реальном времени
+        const currentPrice = window.chartModule && window.chartModule.getCurrentPrice 
+            ? window.chartModule.getCurrentPrice(pairId) 
+            : null;
+        
+        if (currentPrice !== null && activeRound.start_price) {
+            // Определяем потенциальный выигрыш на основе текущей цены
+            let isPotentialWin = false;
+            if (activeRound.direction === 'BUY') {
+                isPotentialWin = currentPrice > activeRound.start_price;
+            } else if (activeRound.direction === 'SELL') {
+                isPotentialWin = currentPrice < activeRound.start_price;
+            }
+            
+            // Рассчитываем потенциальную прибыль
+            const potentialProfit = calculateProfit(activeRound.amount, isPotentialWin);
+            const profitValue = Math.abs(potentialProfit);
+            const formattedProfit = profitValue.toFixed(2).replace('.', ',');
+            
+            // Обновляем description с жирным шрифтом
+            descriptionEl.textContent = potentialProfit >= 0 ? `R$ ${formattedProfit}` : `R$ -${formattedProfit}`;
+            
+            // Добавляем/удаляем классы в зависимости от потенциального результата
+            tab.classList.remove('loosing', 'winning');
+            tab.classList.add(isPotentialWin ? 'winning' : 'loosing');
+        } else {
+            // Цена недоступна - показываем "Crypto"
+            tab.classList.remove('loosing', 'winning');
+            descriptionEl.textContent = 'Crypto';
+        }
+    } else {
+        // Нет раундов - обычное отображение
+        tab.classList.remove('loosing', 'winning');
+        descriptionEl.textContent = 'Crypto';
+    }
 }
 
 function createTab(pair) {
@@ -532,8 +736,8 @@ function createTab(pair) {
     tab.setAttribute('data-pair-id', pair.id);
     tab.setAttribute('data-v-f02899e6', '');
     
-    // URL иконки символа из маппинга
-    const iconUrl = getIconUrl(pair.symbol);
+    // URL иконки символа из маппинга (с учетом категории)
+    const iconUrl = getIconUrl(pair.symbol, pair.category);
     // Локальный fallback, чтобы не было сетевых ошибок DNS
     const fallbackIcon = '/api/img/mini-logo.png';
     
@@ -559,6 +763,9 @@ function createTab(pair) {
         e.stopPropagation();
         removePair(pair.id);
     });
+    
+    // Обновляем вкладку для отображения результата раунда, если есть
+    updateTabForRound(pair.id);
     
     return tab;
 }
@@ -730,6 +937,29 @@ function switchToPair(pairId) {
             // чтобы гарантированно подхватить правильный pairId и данные
             console.log(`📈 Re-init chart for pair ${pairId} in container ${chartId}`);
             window.chartModule.initChart(pairId, chartContainer);
+            
+            // Восстанавливаем ордера для этой пары после инициализации графика
+            setTimeout(() => {
+                const roundsForPair = activeRounds.filter(r => r.pair_id === pairId);
+                roundsForPair.forEach(round => {
+                    if (round.start_price && window.chartModule && window.chartModule.drawOrderLine) {
+                        const orderTime = Date.now() / 1000;
+                        const countdownSeconds = round.countdownSeconds || 60;
+                        const amount = round.amount || 0;
+                        const direction = round.direction || 'BUY';
+                        console.log(`🔄 [switchToPair] Restoring order ${round.id} for pair ${pairId}`);
+                        window.chartModule.drawOrderLine(
+                            pairId,
+                            round.start_price,
+                            round.id.toString(),
+                            direction,
+                            orderTime,
+                            countdownSeconds,
+                            amount
+                        );
+                    }
+                });
+            }, 500); // Небольшая задержка для инициализации графика
         }
     }
     
@@ -754,9 +984,34 @@ function switchToPair(pairId) {
         }
         
         if (!isNaN(serverTimeSec)) {
-            // Вычисляем время до полной минуты (секунды до следующей минуты)
-            const secondsInCurrentMinute = serverTimeSec % 60;
-            const remaining = 60 - secondsInCurrentMinute;
+            // Вычисляем время до окончания раунда (в секундах)
+            const now = serverTimeSec * 1000;
+            let endTimeConverted = activeRound.end_time_converted;
+            if (!endTimeConverted) {
+                // Fallback: конвертируем на лету
+                let endTimeUTC = null;
+                if (typeof activeRound.end_time === 'string') {
+                    endTimeUTC = new Date(activeRound.end_time).getTime();
+                    if (isNaN(endTimeUTC)) {
+                        const isoString = activeRound.end_time.replace(' ', 'T');
+                        endTimeUTC = new Date(isoString).getTime();
+                    }
+                    if (isNaN(endTimeUTC)) {
+                        endTimeUTC = new Date(activeRound.end_time + 'Z').getTime();
+                    }
+                } else if (typeof activeRound.end_time === 'number') {
+                    if (activeRound.end_time < 1e10) {
+                        endTimeUTC = activeRound.end_time * 1000;
+                    } else {
+                        endTimeUTC = activeRound.end_time;
+                    }
+                } else {
+                    endTimeUTC = activeRound.end_time;
+                }
+                const UTC_OFFSET_MS = 3 * 3600 * 1000;
+                endTimeConverted = endTimeUTC ? endTimeUTC - UTC_OFFSET_MS : null;
+            }
+            const remaining = Math.max(0, Math.floor((endTimeConverted - now) / 1000));
             updateRoundTimeRemaining(activeRound.id, remaining, pairId, activeRound.duration);
         }
     }
@@ -774,6 +1029,11 @@ function switchToPair(pairId) {
     updateTimeDisplay(pairId);
     updateAmountDisplay(pairId);
     updateProfitDisplay(pairId);
+    
+    // Обновляем мобильный аккаунт
+    if (typeof updateMobileAccount === 'function') {
+        updateMobileAccount();
+    }
 }
 
 function removePair(pairId) {
@@ -914,7 +1174,7 @@ function renderPairsList(pairs) {
     
     pairs.forEach(pair => {
         const isSelected = selectedPairs.some(p => p.id === pair.id);
-        const iconUrl = getIconUrl(pair.symbol);
+        const iconUrl = getIconUrl(pair.symbol, pair.category);
         const category = pair.category || 'Crypto';
         const payout = pair.payout || '85%';
         const lastPrice = pair.last_price || '0.000000';
@@ -1011,8 +1271,21 @@ function updateProfitDisplay(pairId = null) {
 }
 
 function updateBalanceDisplay() {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1163',message:'updateBalanceDisplay entry',data:{userBalance:userBalance},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
+    const balanceEl = document.getElementById('balance');
+    if (!balanceEl) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1166',message:'balance element not found',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        return;
+    }
     const formatted = userBalance.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    document.getElementById('balance').textContent = `R$ ${formatted}`;
+    balanceEl.textContent = `R$ ${formatted}`;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1171',message:'updateBalanceDisplay exit',data:{userBalance:userBalance,formatted:formatted,textContent:balanceEl.textContent},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
 }
 
 function updateServerTime(timeStr) {
@@ -1140,13 +1413,23 @@ function startGlobalTimeRemainingTimer() {
             return;
         }
         
-        // Вычисляем время до полной минуты (секунды до следующей минуты)
-        const secondsInCurrentMinute = serverTimeSec % 60;
-        const remaining = 60 - secondsInCurrentMinute;
+        // Вычисляем время до окончания раунда для каждой пары
+        const now = serverTimeSec * 1000;
         
         // Обновляем время для всех активных пар
+        // ВСЕГДА показываем время до следующей полной минуты на основе server time
         selectedPairs.forEach(pair => {
+            // Вычисляем секунды до следующей полной минуты на основе server time
+            const secondsInCurrentMinute = serverTimeSec % 60;
+            const remaining = 60 - secondsInCurrentMinute;
+            
+            // Находим активный раунд для этой пары (для обновления цвета линии ордера)
+            const activeRoundForPair = activeRounds.find(r => r.pair_id === pair.id);
+            
             const timeElement = document.getElementById(`round-start-time-${pair.id}`);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1394',message:'global timer updating time',data:{pairId:pair.id,remaining:remaining,serverTimeSec:serverTimeSec,secondsInCurrentMinute:serverTimeSec%60,timeElementExists:!!timeElement},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+            // #endregion
             if (timeElement) {
                 const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
                 const ss = String(remaining % 60).padStart(2, '0');
@@ -1161,15 +1444,14 @@ function startGlobalTimeRemainingTimer() {
                 }
             }
             
-            // Обновляем прогресс-бар для всех пар (показываем оставшееся время до полной минуты)
+            // Обновляем прогресс-бар для всех пар (показываем оставшееся время до окончания раунда)
             const barElement = document.getElementById(`round-bar-${pair.id}`);
             if (barElement) {
-                // Прогресс рассчитываем как оставшееся время до полной минуты
-                // remaining - секунды до полной минуты (60-1)
-                // Прогресс = (remaining / 60) * 100
-                // При remaining = 60 (начало минуты) → 100%
-                // При remaining = 0 (конец минуты) → 0%
-                const progress = Math.max(0, Math.min(100, (remaining / 60) * 100));
+                // Прогресс рассчитываем как оставшееся время до окончания раунда
+                // remaining - секунды до окончания раунда
+                // Прогресс = (remaining / duration) * 100
+                const duration = activeRoundForPair ? (activeRoundForPair.duration || 60) : 60;
+                const progress = Math.max(0, Math.min(100, (remaining / duration) * 100));
                 barElement.style.width = `${progress}%`;
                 
                 // Меняем цвет прогресс-бара в зависимости от оставшегося времени
@@ -1181,13 +1463,8 @@ function startGlobalTimeRemainingTimer() {
                 }
             }
             
-            // Обновляем цвет линии ордера для активных раундов этой пары
-            if (window.chartModule && window.chartModule.updateOrderLineColor) {
-                const activeRoundsForPair = activeRounds.filter(r => r.pair_id === pair.id);
-                activeRoundsForPair.forEach(round => {
-                    window.chartModule.updateOrderLineColor(pair.id, round.id.toString(), remaining);
-                });
-            }
+            // Цвет линии статичный и определяется направлением ордера при создании
+            // BUY - зеленый (#22c55e), SELL - красный (#ef4444)
         });
     }, 1000);
 }
@@ -1206,6 +1483,27 @@ async function createRound(direction, pairId = null) {
         alert('Недостаточно средств');
         return;
     }
+    
+    // Вычисляем time_remaining (секунды до следующей полной минуты)
+    const serverTimeSec = window.getServerTimeUTC();
+    if (isNaN(serverTimeSec) || serverTimeSec === null) {
+        console.error('❌ [createRound] Server time not available');
+        alert('Ошибка: время сервера недоступно');
+        return;
+    }
+    
+    const secondsInCurrentMinute = serverTimeSec % 60;
+    const timeRemaining = 60 - secondsInCurrentMinute;
+    
+    // Вычисляем время обратного отсчета согласно новой логике
+    let countdownSeconds;
+    if (timeRemaining < 30) {
+        countdownSeconds = 60 + timeRemaining;
+    } else {
+        countdownSeconds = timeRemaining;
+    }
+    
+    console.log(`⏱️ [createRound] time_remaining: ${timeRemaining}s, countdown: ${countdownSeconds}s`);
     
     const requestData = {
         user_id: 1,
@@ -1238,6 +1536,11 @@ async function createRound(direction, pairId = null) {
         if (response.ok) {
             const round = await response.json();
             console.log('✅ [createRound] Round created successfully:', round);
+            
+            // Добавляем countdownSeconds в объект раунда
+            round.countdownSeconds = countdownSeconds;
+            round.startCountdownTime = Date.now(); // Время начала обратного отсчета
+            
             addActiveRound(round, direction);
             loadBalance(); // Обновляем баланс
             
@@ -1270,8 +1573,7 @@ async function createRound(direction, pairId = null) {
                 const orderTime = round.start_time ? new Date(round.start_time).getTime() / 1000 : Math.floor(Date.now() / 1000);
                 console.log(`📏 [createRound] Drawing order line at price ${orderPrice} (start_price: ${round.start_price}) for ${direction} order`);
                 console.log(`📏 [createRound] Order time: ${orderTime} (from start_time: ${round.start_time})`);
-                // Передаем end_time для обратного отсчета
-                const endTime = round.end_time || null;
+                // Передаем countdownSeconds вместо endTime для индивидуального обратного отсчета
                 const amount = round.amount || tradeAmount || 0;
                 window.chartModule.drawOrderLine(
                     targetPairId,
@@ -1279,13 +1581,13 @@ async function createRound(direction, pairId = null) {
                     round.id.toString(),
                     direction,
                     orderTime, // Передаем время создания ордера
-                    endTime, // Передаем время окончания раунда для обратного отсчета
+                    countdownSeconds, // Передаем время обратного отсчета в секундах
                     amount // Сумма, на которую покупаем
                 );
             }
             
-            // Загружаем активные раунды для обновления списка
-            loadActiveRounds();
+            // НЕ вызываем loadActiveRounds() здесь, так как ордер уже добавлен через addActiveRound()
+            // и имеет правильный countdownSeconds
         } else {
             const error = await response.json();
             console.error('❌ [createRound] Error response:', error);
@@ -1298,18 +1600,29 @@ async function createRound(direction, pairId = null) {
 }
 
 function addActiveRound(roundData, direction) {
+    // Используем новую логику с countdownSeconds
+    const countdownSeconds = roundData.countdownSeconds || 60; // По умолчанию 60 секунд, если не указано
+    const startCountdownTime = roundData.startCountdownTime || Date.now();
+    
     const round = {
         id: roundData.id,
         pair_id: roundData.pair_id || activePairId || 1,
         direction: direction,
-        amount: tradeAmount,
+        amount: roundData.amount || tradeAmount,
         duration: tradeDuration,
-        end_time: roundData.end_time,
         start_price: roundData.start_price,
+        countdownSeconds: countdownSeconds,
+        startCountdownTime: startCountdownTime,
     };
+    
+    console.log(`✅ [addActiveRound] Added round ${round.id} with countdown: ${countdownSeconds}s`);
     
     activeRounds.push(round);
     updateActiveRoundsDisplay();
+    
+    // Обновляем время сразу при создании раунда
+    updateRoundTimeRemaining(round.id, countdownSeconds, round.pair_id, round.duration);
+    
     startRoundTimer(round);
 }
 
@@ -1319,47 +1632,55 @@ function startRoundTimer(round) {
         clearInterval(roundTimers.get(round.id));
     }
     
-    console.log(`⏱️ [startRoundTimer] Starting timer for round ${round.id}, pair ${round.pair_id}, end_time: ${round.end_time}`);
+    // Используем countdownSeconds для индивидуального обратного отсчета
+    const countdownSeconds = round.countdownSeconds || 60;
+    const startCountdownTime = round.startCountdownTime || Date.now();
     
+    console.log(`⏱️ [startRoundTimer] Starting timer for round ${round.id}, pair ${round.pair_id}, countdown: ${countdownSeconds}s`);
+    
+    // Вычисляем оставшееся время на основе прошедшего времени с момента старта
+    const calculateRemaining = () => {
+        const elapsed = Math.floor((Date.now() - startCountdownTime) / 1000);
+        return Math.max(0, countdownSeconds - elapsed);
+    };
+    
+    // Проверяем сразу при запуске таймера
+    let remainingSeconds = calculateRemaining();
+    if (remainingSeconds <= 0) {
+        console.log(`⏰ [startRoundTimer] Round ${round.id} already expired at start, finishing on client`);
+        finishRoundOnClient(round);
+        return;
+    }
+    
+    // Обновляем время сразу
+    updateRoundTimeRemaining(round.id, remainingSeconds, round.pair_id, round.duration);
+    
+    // Обновляем таймер в прямоугольнике на графике
+    if (window.chartModule && window.chartModule.updateOrderCountdown) {
+        window.chartModule.updateOrderCountdown(round.pair_id, round.id.toString(), remainingSeconds);
+    }
+    
+    // Используем интервал для обновления каждую секунду
     const interval = setInterval(() => {
-        // ВСЕГДА используем серверное время для расчета
-        const serverTimeSec = window.getServerTimeUTC();
-        const now = serverTimeSec * 1000; // Конвертируем в миллисекунды
+        remainingSeconds = calculateRemaining();
         
-        let endTime;
+        // Обновляем отображение времени
+        updateRoundTimeRemaining(round.id, remainingSeconds, round.pair_id, round.duration);
         
-        // Парсим время окончания
-        if (typeof round.end_time === 'string') {
-            endTime = new Date(round.end_time).getTime();
-        } else if (typeof round.end_time === 'number') {
-            // Если это Unix timestamp в секундах, конвертируем в миллисекунды
-            if (round.end_time < 1e10) {
-                endTime = round.end_time * 1000;
-            } else {
-                endTime = round.end_time;
-            }
-        } else {
-            endTime = round.end_time;
+        // Обновляем таймер в прямоугольнике на графике
+        if (window.chartModule && window.chartModule.updateOrderCountdown) {
+            window.chartModule.updateOrderCountdown(round.pair_id, round.id.toString(), remainingSeconds);
         }
         
-        // Проверяем валидность времени
-        if (isNaN(endTime) || endTime === 0 || isNaN(now) || isNaN(serverTimeSec)) {
-            console.error('Invalid end_time or now for round:', round, 'now:', now, 'serverTimeSec:', serverTimeSec);
+        // Если время истекло, завершаем раунд
+        if (remainingSeconds <= 0) {
+            console.log(`⏰ [startRoundTimer] Round ${round.id} time expired, finishing on client`);
             clearInterval(interval);
             roundTimers.delete(round.id);
+            finishRoundOnClient(round);
             return;
         }
-        
-        // Вычисляем время до полной минуты (секунды до следующей минуты)
-        const secondsInCurrentMinute = serverTimeSec % 60;
-        const remaining = 60 - secondsInCurrentMinute;
-        
-        // Логируем только раз в 10 секунд, чтобы не засорять консоль
-        if (remaining % 10 === 0 || remaining < 10) {
-            console.log(`⏱️ [startRoundTimer] Round ${round.id}, time to full minute: ${remaining}s, serverTime: ${serverTimeSec}, seconds in minute: ${secondsInCurrentMinute}`);
-        }
-        updateRoundTimeRemaining(round.id, remaining, round.pair_id, round.duration);
-    }, 1000);
+    }, 1000); // Обновляем каждую секунду
     
     // Сохраняем ID интервала
     roundTimers.set(round.id, interval);
@@ -1370,6 +1691,10 @@ function updateRoundTimeRemaining(roundId, seconds, pairId = null, duration = nu
     const secs = seconds % 60;
     const timeStr = `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1900',message:'updateRoundTimeRemaining entry',data:{roundId:roundId,seconds:seconds,pairId:pairId,duration:duration,timeStr:timeStr},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+    // #endregion
+    
     // Обновляем элемент в списке активных раундов
     const roundElement = document.querySelector(`[data-round-id="${roundId}"]`);
     if (roundElement) {
@@ -1379,44 +1704,8 @@ function updateRoundTimeRemaining(roundId, seconds, pairId = null, duration = nu
         }
     }
     
-    // Обновляем элемент в rightbar для конкретной пары
-    if (pairId) {
-        const timeElement = document.getElementById(`round-start-time-${pairId}`);
-        if (timeElement) {
-            timeElement.textContent = timeStr;
-            
-            // Меняем цвет в зависимости от оставшегося времени
-            // ≤10 секунд - красный, >10 секунд - зеленый
-            if (seconds <= 10) {
-                timeElement.className = 'pull-right text-sell';
-            } else {
-                timeElement.className = 'pull-right text-buy';
-            }
-        }
-        
-        // Обновляем прогресс-бар
-        const barElement = document.getElementById(`round-bar-${pairId}`);
-        if (barElement && duration) {
-            const progress = Math.max(0, Math.min(100, (seconds / duration) * 100));
-            barElement.style.width = `${progress}%`;
-            
-            // Меняем цвет прогресс-бара в зависимости от оставшегося времени
-            // ≤10 секунд - красный, >10 секунд - зеленый
-            if (seconds <= 10) {
-                barElement.className = 'sc-bar-fill bg-sell';
-            } else {
-                barElement.className = 'sc-bar-fill bg-buy';
-            }
-        }
-        
-        // Обновляем цвет линии ордера для этой пары
-        if (window.chartModule && window.chartModule.updateOrderLineColor) {
-            const activeRoundsForPair = activeRounds.filter(r => r.pair_id === pairId);
-            activeRoundsForPair.forEach(round => {
-                window.chartModule.updateOrderLineColor(pairId, round.id.toString(), seconds);
-            });
-        }
-    }
+    // НЕ обновляем "Time remaining" в rightbar здесь - это делает startGlobalTimeRemainingTimer
+    // Цвет линии статичный и определяется направлением ордера (BUY - зеленый, SELL - красный)
 }
 
 function updateActiveRoundsDisplay() {
@@ -1463,8 +1752,153 @@ function updateActiveRoundsDisplay() {
     });
 }
 
+// Функции для расчета результата на клиенте
+function determineRoundResult(winRate) {
+    const randomValue = Math.floor(Math.random() * 100) + 1;
+    return randomValue <= winRate;
+}
+
+function calculateProfit(amount, isWin) {
+    if (isWin) {
+        return amount * 0.85; // 85% прибыль
+    }
+    return -amount; // Проигрыш - теряем всю ставку
+}
+
+async function finishRoundOnClient(round) {
+    console.log(`🏁 [finishRoundOnClient] Finishing round ${round.id} on client`);
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1638',message:'finishRoundOnClient entry',data:{roundId:round.id,pairId:round.pair_id,amount:round.amount,apiBase:window.API_BASE},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+    
+    try {
+        // 1. Запрашиваем win_rate с сервера
+        const winRateUrl = `${window.API_BASE}/win-rate`;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1643',message:'fetching win_rate',data:{url:winRateUrl,roundId:round.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+        const winRateResponse = await fetch(winRateUrl);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1644',message:'win_rate response',data:{roundId:round.id,ok:winRateResponse.ok,status:winRateResponse.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+        const winRateData = await winRateResponse.json();
+        const winRate = winRateData.win_rate || 50;
+        console.log(`📊 [finishRoundOnClient] Win rate from server: ${winRate}%`);
+        
+        // 2. Рассчитываем результат на клиенте
+        const isWin = determineRoundResult(winRate);
+        const amount = round.amount || 0;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1649',message:'calculating result',data:{roundId:round.id,amount:amount,winRate:winRate,isWin:isWin},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        const profit = calculateProfit(amount, isWin);
+        
+        console.log(`🎲 [finishRoundOnClient] Round result: win=${isWin}, profit=${profit}, amount=${amount}`);
+        
+        // 3. Отправляем результат на сервер
+        const finishUrl = `${window.API_BASE}/rounds/${round.id}/finish`;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1656',message:'sending finish request',data:{url:finishUrl,roundId:round.id,win:isWin,profit:profit},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
+        const finishResponse = await fetch(finishUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                win: isWin,
+                profit: profit
+            })
+        });
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1667',message:'finish response',data:{roundId:round.id,ok:finishResponse.ok,status:finishResponse.status,statusText:finishResponse.statusText},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
+        
+        if (!finishResponse.ok) {
+            throw new Error(`Failed to finish round: ${finishResponse.statusText}`);
+        }
+        
+        const finishData = await finishResponse.json();
+        const newBalance = finishData.new_balance;
+        
+        console.log(`✅ [finishRoundOnClient] Round finished on server, new balance: ${newBalance}`);
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1672',message:'before UI update',data:{roundId:round.id,oldBalance:userBalance,newBalance:newBalance},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        
+        // 4. Обновляем UI
+        userBalance = newBalance;
+        updateBalanceDisplay();
+        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1678',message:'after balance update',data:{roundId:round.id,userBalance:userBalance},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
+        
+        // Удаляем раунд из активных
+        activeRounds = activeRounds.filter(r => r.id !== round.id);
+        updateActiveRoundsDisplay();
+        
+        // Удаляем линию с графика
+        if (window.chartModule && window.chartModule.removeOrderLine && round.pair_id) {
+            console.log(`🗑️ [finishRoundOnClient] Removing order line for round ${round.id}, pair ${round.pair_id}`);
+            window.chartModule.removeOrderLine(round.pair_id, round.id.toString());
+        }
+        
+        // Останавливаем таймер (уже остановлен, но на всякий случай)
+        if (roundTimers.has(round.id)) {
+            clearInterval(roundTimers.get(round.id));
+            roundTimers.delete(round.id);
+        }
+        
+        // Обновляем вкладку
+        if (round.pair_id) {
+            updateTabForRound(round.pair_id, {
+                win: isWin,
+                profit: profit
+            });
+            
+            // Очищаем форматирование через 3 секунды, если больше нет активных ордеров
+            setTimeout(() => {
+                const hasActiveRounds = activeRounds.some(r => r.pair_id === round.pair_id);
+                if (!hasActiveRounds) {
+                    // Удаляем данные завершенного раунда из хранилища
+                    finishedRounds.delete(round.pair_id);
+                    // Обновляем вкладку без данных (вернет "Crypto" и уберет классы)
+                    updateTabForRound(round.pair_id);
+                }
+            }, 3000);
+        }
+        
+        // Показываем всплывашку
+        showRoundResultNotification({
+            round_id: round.id,
+            pair_id: round.pair_id,
+            win: isWin,
+            profit: profit,
+            new_balance: newBalance
+        });
+        
+    } catch (error) {
+        console.error(`❌ [finishRoundOnClient] Error finishing round ${round.id}:`, error);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1710',message:'finishRoundOnClient error',data:{roundId:round.id,error:error.message,errorStack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+        // В случае ошибки все равно удаляем раунд из активных и останавливаем таймер
+        activeRounds = activeRounds.filter(r => r.id !== round.id);
+        updateActiveRoundsDisplay();
+        if (roundTimers.has(round.id)) {
+            clearInterval(roundTimers.get(round.id));
+            roundTimers.delete(round.id);
+        }
+    }
+}
+
 function handleRoundFinished(data) {
     console.log(`🏁 [handleRoundFinished] Round finished:`, data);
+    console.log(`🏁 [handleRoundFinished] Full data object:`, JSON.stringify(data, null, 2));
     
     // Получаем pair_id из данных или из активных раундов
     const finishedRound = activeRounds.find(r => r.id === data.round_id);
@@ -1489,8 +1923,19 @@ function handleRoundFinished(data) {
     updateActiveRoundsDisplay();
     
     // Обновляем баланс
-    userBalance = data.new_balance;
-    updateBalanceDisplay();
+    console.log(`💰 [handleRoundFinished] Balance update:`, {
+        oldBalance: userBalance,
+        newBalance: data.new_balance,
+        profit: data.profit,
+        win: data.win
+    });
+    if (data.new_balance !== undefined && data.new_balance !== null) {
+        userBalance = data.new_balance;
+        updateBalanceDisplay();
+    } else {
+        console.warn(`⚠️ [handleRoundFinished] new_balance is missing, reloading balance from server`);
+        loadBalance();
+    }
     
     // Показываем результат
     const message = data.win 
@@ -1499,10 +1944,154 @@ function handleRoundFinished(data) {
     
     console.log(message);
     
-    // Показываем всплывашку при выигрыше
-    if (data.win && data.profit > 0) {
-        showProfitNotification(data.profit);
+    // Обновляем вкладку для отображения результата
+    if (pairId) {
+        updateTabForRound(pairId, {
+            win: data.win,
+            profit: data.profit
+        });
+        
+        // Очищаем форматирование через 3 секунды, если больше нет активных ордеров
+        setTimeout(() => {
+            const hasActiveRounds = activeRounds.some(r => r.pair_id === pairId);
+            if (!hasActiveRounds) {
+                // Удаляем данные завершенного раунда из хранилища
+                finishedRounds.delete(pairId);
+                // Обновляем вкладку без данных (вернет "Crypto" и уберет классы)
+                updateTabForRound(pairId);
+            }
+        }, 3000);
+        
+        // Убеждаемся, что pair_id передается в data для всплывашки
+        if (!data.pair_id) {
+            data.pair_id = pairId;
+        }
     }
+    
+    // Показываем всплывашку результата сделки (всегда - и при выигрыше, и при проигрыше)
+    showRoundResultNotification(data);
+}
+
+function showRoundResultNotification(data) {
+    console.log(`🔔 [showRoundResultNotification] Showing notification:`, data);
+    
+    // Проверяем, нет ли уже всплывашки с таким же round_id
+    const roundId = data.round_id;
+    if (roundId) {
+        const existingAlert = document.querySelector(`[data-round-id="${roundId}"]`);
+        if (existingAlert) {
+            console.log(`⚠️ [showRoundResultNotification] Notification for round ${roundId} already exists, skipping`);
+            return;
+        }
+    }
+    
+    // Получаем или создаем контейнер для алертов
+    let alertsContainer = document.getElementById('traderoom-alerts');
+    if (!alertsContainer) {
+        alertsContainer = document.createElement('div');
+        alertsContainer.id = 'traderoom-alerts';
+        alertsContainer.setAttribute('data-v-f02899e6', '');
+        alertsContainer.style.cssText = `
+            position: fixed;
+            left: 20px;
+            bottom: 20px;
+            z-index: 99999;
+            pointer-events: none;
+        `;
+        document.body.appendChild(alertsContainer);
+        console.log(`✅ [showRoundResultNotification] Created alerts container`);
+    }
+    
+    // НЕ удаляем старые алерты - показываем все всплывашки одновременно (глобальный фокус)
+    // alertsContainer.innerHTML = '';
+    
+    // Создаем новый алерт
+    const alertEl = document.createElement('div');
+    alertEl.className = 'tr-alert';
+    alertEl.setAttribute('data-v-f02899e6', '');
+    if (roundId) {
+        alertEl.setAttribute('data-round-id', roundId);
+    }
+    alertEl.style.cssText = 'pointer-events: auto; cursor: pointer;';
+    
+    const containerEl = document.createElement('div');
+    containerEl.className = 'tr-container';
+    containerEl.setAttribute('data-v-f02899e6', '');
+    // Стили применяются через CSS класс tr-alert
+    
+    // Получаем иконку пары
+    const pair = selectedPairs.find(p => p.id === data.pair_id) || 
+                 allAvailablePairs.find(p => p.id === data.pair_id);
+    const iconUrl = pair ? getIconUrl(pair.symbol, pair.category) : 
+                      'https://zlincontent.com/cdn/icons/symbols/bitcoin.png';
+    
+    const imgEl = document.createElement('img');
+    imgEl.setAttribute('data-v-f02899e6', '');
+    imgEl.src = iconUrl;
+    imgEl.style.cssText = 'width: 32px; height: 32px; object-fit: contain;';
+    imgEl.onerror = function() {
+        this.src = '/api/img/mini-logo.png';
+    };
+    
+    const contentEl = document.createElement('div');
+    contentEl.className = 'tr-content';
+    contentEl.setAttribute('data-v-f02899e6', '');
+    
+    const titleEl = document.createElement('div');
+    titleEl.className = 'tr-title';
+    titleEl.setAttribute('data-v-f02899e6', '');
+    titleEl.textContent = 'Result';
+    titleEl.style.cssText = `
+        color: #8b8fa3;
+        font-size: 12px;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+    `;
+    
+    const textEl = document.createElement('div');
+    textEl.className = 'tr-text';
+    textEl.setAttribute('data-v-f02899e6', '');
+    const isWin = data.win && data.profit > 0;
+    textEl.classList.add(isWin ? 'text-buy' : 'text-sell');
+    
+    // Форматируем сумму: R$ 10,25 (с запятой)
+    const profitValue = Math.abs(data.profit);
+    const formattedProfit = profitValue.toFixed(2).replace('.', ',');
+    textEl.textContent = isWin ? `R$ ${formattedProfit}` : `R$ -${formattedProfit}`;
+    textEl.style.cssText = `
+        font-size: 16px;
+        font-weight: 600;
+        font-family: Arial, Helvetica, sans-serif;
+    `;
+    
+    contentEl.appendChild(titleEl);
+    contentEl.appendChild(textEl);
+    
+    containerEl.appendChild(imgEl);
+    containerEl.appendChild(contentEl);
+    alertEl.appendChild(containerEl);
+    alertsContainer.appendChild(alertEl);
+    
+    console.log(`✅ [showRoundResultNotification] Notification added to DOM:`, {
+        containerExists: !!alertsContainer,
+        alertExists: !!alertEl,
+        isVisible: alertEl.offsetParent !== null,
+        zIndex: alertsContainer.style.zIndex
+    });
+    
+    // Удаляем через 5 секунд с анимацией
+    setTimeout(() => {
+        containerEl.style.animation = 'slideOutLeft 0.3s ease-in';
+        setTimeout(() => {
+            if (alertEl.parentNode) {
+                alertEl.parentNode.removeChild(alertEl);
+            }
+            // Удаляем контейнер, если он пустой
+            if (alertsContainer.children.length === 0) {
+                alertsContainer.remove();
+            }
+        }, 300);
+    }, 5000);
 }
 
 function showProfitNotification(profit) {
@@ -1582,4 +2171,124 @@ function updateChartPrice(data) {
     // График обрабатывает обновления автоматически
     console.log('💰 [updateChartPrice] Price update received:', data);
 }
+
+// Mobile Account and Tabs functionality
+function updateMobileAccount() {
+    // Обновляем только мобильный элемент account_name
+    const mobileAccounts = document.getElementById('mobile_accounts');
+    if (!mobileAccounts) return;
+    
+    const accountNameEl = mobileAccounts.querySelector('#account_name');
+    if (!accountNameEl) return;
+    
+    const activePair = selectedPairs.find(p => p.id === activePairId) || selectedPairs[0];
+    if (activePair) {
+        const iconUrl = getIconUrl(activePair.symbol, activePair.category);
+        accountNameEl.innerHTML = `<img data-v-f02899e6="" src="${iconUrl}" width="25"> ${activePair.name || activePair.symbol}`;
+    }
+}
+
+function openMobileTabs() {
+    const mobileTabs = document.getElementById('mobile-tabs');
+    if (!mobileTabs) return;
+    
+    const content = document.getElementById('mobile-tabs-content');
+    if (!content) return;
+    
+    // Очищаем содержимое
+    content.innerHTML = '';
+    
+    // Добавляем выбранные пары
+    selectedPairs.forEach(pair => {
+        const iconUrl = getIconUrl(pair.symbol, pair.category);
+        const item = document.createElement('div');
+        item.className = `item ${pair.id === activePairId ? 'active' : ''}`;
+        item.setAttribute('data-v-f02899e6', '');
+        item.innerHTML = `
+            <div style="display: flex; align-items: center;">
+                <img data-v-f02899e6="" src="${iconUrl}" style="width: 30px; height: 30px; margin-right: 10px;">
+                ${pair.name || pair.symbol}
+            </div>
+            <button data-v-f02899e6="" class="remove-pair-btn" data-pair-id="${pair.id}">
+                <i data-v-f02899e6="" class="fa fa-times"></i>
+            </button>
+        `;
+        
+        // Обработчик клика на элемент
+        item.addEventListener('click', (e) => {
+            if (!e.target.closest('button')) {
+                switchToPair(pair.id);
+                updateMobileAccount();
+                closeMobileTabs();
+            }
+        });
+        
+        // Обработчик удаления пары
+        const removeBtn = item.querySelector('.remove-pair-btn');
+        if (removeBtn && selectedPairs.length > 1) {
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                removePair(pair.id);
+                updateMobileAccount();
+                openMobileTabs(); // Обновляем список
+            });
+        }
+        
+        content.appendChild(item);
+    });
+    
+    // Добавляем кнопку "Add symbol"
+    const addItem = document.createElement('div');
+    addItem.className = 'item add';
+    addItem.setAttribute('data-v-f02899e6', '');
+    addItem.innerHTML = `<i data-v-f02899e6="" class="fa fa-plus"></i> Add symbol`;
+    addItem.addEventListener('click', () => {
+        closeMobileTabs();
+        showAddPairModal();
+    });
+    content.appendChild(addItem);
+    
+    mobileTabs.style.display = 'block';
+}
+
+function closeMobileTabs() {
+    const mobileTabs = document.getElementById('mobile-tabs');
+    if (mobileTabs) {
+        mobileTabs.style.display = 'none';
+    }
+}
+
+// Инициализация мобильных элементов
+document.addEventListener('DOMContentLoaded', () => {
+    // Обновляем мобильный аккаунт после загрузки пар
+    setTimeout(() => {
+        updateMobileAccount();
+    }, 1000);
+    
+    // Обработчик клика на мобильный аккаунт
+    const accountDetails = document.getElementById('account_details');
+    if (accountDetails) {
+        accountDetails.addEventListener('click', () => {
+            openMobileTabs();
+        });
+    }
+    
+    // Обработчик закрытия модального окна
+    const closeBtn = document.getElementById('closeMobileTabs');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeMobileTabs();
+        });
+    }
+    
+    // Обновляем мобильный аккаунт при переключении пар
+    const originalSwitchToPair = window.switchToPair;
+    if (originalSwitchToPair) {
+        window.switchToPair = function(pairId) {
+            originalSwitchToPair(pairId);
+            updateMobileAccount();
+        };
+    }
+});
 

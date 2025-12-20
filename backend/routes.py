@@ -179,6 +179,28 @@ def get_active_rounds():
     
     rounds = []
     for row in cursor.fetchall():
+        # Конвертируем end_time в Unix timestamp (миллисекунды) для единообразия
+        end_time = row[6]
+        if end_time:
+            if isinstance(end_time, str):
+                # Если строка, парсим в datetime
+                from datetime import datetime
+                try:
+                    end_time_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                except:
+                    try:
+                        end_time_dt = datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S.%f')
+                    except:
+                        end_time_dt = datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S')
+                end_time_ms = int(end_time_dt.timestamp() * 1000)
+            elif hasattr(end_time, 'timestamp'):
+                # Если datetime объект
+                end_time_ms = int(end_time.timestamp() * 1000)
+            else:
+                end_time_ms = end_time
+        else:
+            end_time_ms = None
+        
         rounds.append({
             'id': row[0],
             'pair_id': row[1],
@@ -186,7 +208,7 @@ def get_active_rounds():
             'amount': row[3],
             'duration': row[4],
             'start_time': row[5],
-            'end_time': row[6],
+            'end_time': end_time_ms,  # Возвращаем Unix timestamp в миллисекундах
             'start_price': row[7],
             'symbol': row[8],
             'name': row[9]
@@ -194,6 +216,103 @@ def get_active_rounds():
     
     conn.close()
     return jsonify(rounds)
+
+@api.route('/rounds/<int:round_id>/finish', methods=['POST'])
+def finish_round(round_id):
+    """Завершить раунд с результатом от клиента"""
+    import json
+    import os
+    data = request.json
+    win = data.get('win')
+    profit = data.get('profit')
+    
+    # #region agent log
+    log_path = '/Users/g.fink/Documents/GitHub/lynxtrade/.cursor/debug.log'
+    try:
+        with open(log_path, 'a') as f:
+            f.write(json.dumps({'location': 'routes.py:198', 'message': 'finish_round entry', 'data': {'round_id': round_id, 'win': win, 'profit': profit}, 'timestamp': int(__import__('time').time() * 1000), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'D'}) + '\n')
+    except: pass
+    # #endregion
+    
+    if win is None or profit is None:
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({'location': 'routes.py:205', 'message': 'missing win or profit', 'data': {'round_id': round_id, 'win': win, 'profit': profit}, 'timestamp': int(__import__('time').time() * 1000), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'D'}) + '\n')
+        except: pass
+        # #endregion
+        return jsonify({'error': 'win and profit are required'}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Получаем данные раунда
+    cursor.execute('''
+        SELECT user_id, pair_id, amount, start_price
+        FROM rounds
+        WHERE id = ? AND status = 'active'
+    ''', (round_id,))
+    
+    round_data = cursor.fetchone()
+    if not round_data:
+        # #region agent log
+        try:
+            with open(log_path, 'a') as f:
+                f.write(json.dumps({'location': 'routes.py:219', 'message': 'round not found', 'data': {'round_id': round_id}, 'timestamp': int(__import__('time').time() * 1000), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'D'}) + '\n')
+        except: pass
+        # #endregion
+        conn.close()
+        return jsonify({'error': 'Round not found or already finished'}), 404
+    
+    user_id, pair_id, amount, start_price = round_data
+    
+    # #region agent log
+    try:
+        with open(log_path, 'a') as f:
+            f.write(json.dumps({'location': 'routes.py:223', 'message': 'round data retrieved', 'data': {'round_id': round_id, 'user_id': user_id, 'amount': amount, 'win': win, 'profit': profit}, 'timestamp': int(__import__('time').time() * 1000), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'D'}) + '\n')
+    except: pass
+    # #endregion
+    
+    # Получаем текущую цену для end_price
+    from utils import get_current_price
+    end_price = get_current_price(pair_id)
+    
+    # Обновляем баланс пользователя
+    if win:
+        # Выигрыш: возвращаем ставку + прибыль
+        new_balance_change = amount + profit
+        cursor.execute('UPDATE users SET balance = balance + ? WHERE id = ?', 
+                     (new_balance_change, user_id))
+    # Если проигрыш, баланс не меняется (ставка уже была списана при создании)
+    
+    # Сохраняем результат
+    cursor.execute('''
+        INSERT INTO round_results (round_id, win, profit, end_price)
+        VALUES (?, ?, ?, ?)
+    ''', (round_id, win, profit, end_price))
+    
+    # Обновляем статус раунда
+    cursor.execute('UPDATE rounds SET status = ? WHERE id = ?', 
+                  ('finished', round_id))
+    
+    # Получаем новый баланс
+    cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
+    new_balance = cursor.fetchone()[0]
+    
+    # #region agent log
+    try:
+        with open(log_path, 'a') as f:
+            f.write(json.dumps({'location': 'routes.py:246', 'message': 'balance updated', 'data': {'round_id': round_id, 'user_id': user_id, 'new_balance': new_balance, 'win': win, 'profit': profit}, 'timestamp': int(__import__('time').time() * 1000), 'sessionId': 'debug-session', 'runId': 'run1', 'hypothesisId': 'D'}) + '\n')
+    except: pass
+    # #endregion
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'new_balance': new_balance,
+        'round_id': round_id
+    }), 200
 
 @api.route('/chart-data/<int:pair_id>', methods=['GET'])
 def get_chart_data(pair_id):
@@ -279,6 +398,7 @@ def get_all_prices():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@api.route('/win-rate', methods=['GET'])
 @api.route('/admin/win-rate', methods=['GET'])
 def get_win_rate():
     """Получить процент выигрыша"""

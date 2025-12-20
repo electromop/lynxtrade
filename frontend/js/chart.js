@@ -443,10 +443,12 @@ function initChart(pairId = 1, containerElement = null) {
         const innerWrap = document.createElement('div');
         innerWrap.className = 'innerWrap-OhqNVIYA';
         
-        // Функция для создания разделителя (отключена)
-        function createSeparator() {
-            // Разделители скрыты через CSS
-            return null;
+        // Функция для создания вертикального разделителя
+        function createVerticalSeparator() {
+            const separator = document.createElement('div');
+            separator.className = 'vertical-separator';
+            separator.style.cssText = 'width: 1px; height: 24px; background: rgba(255, 255, 255, 0.3); margin: 0 8px; align-self: center;';
+            return separator;
         }
         
         // Функция для создания группы
@@ -478,8 +480,8 @@ function initChart(pairId = 1, containerElement = null) {
         intervalsGroup.appendChild(intervalsWrap);
         innerWrap.appendChild(intervalsGroup);
         
-        // Разделитель (отключен)
-        // innerWrap.appendChild(createSeparator());
+        // Вертикальный разделитель после интервалов
+        innerWrap.appendChild(createVerticalSeparator());
         
         // Группа 2: Стили графика
         const chartStylesGroup = createGroup();
@@ -503,8 +505,8 @@ function initChart(pairId = 1, containerElement = null) {
         chartStylesGroup.appendChild(chartStylesWrap);
         innerWrap.appendChild(chartStylesGroup);
         
-        // Разделитель (отключен)
-        // innerWrap.appendChild(createSeparator());
+        // Вертикальный разделитель после стилей графика
+        innerWrap.appendChild(createVerticalSeparator());
         
         // Группа 3: Индикаторы
         const indicatorsGroup = createGroup();
@@ -530,8 +532,8 @@ function initChart(pairId = 1, containerElement = null) {
         indicatorsGroup.appendChild(indicatorsWrap);
         innerWrap.appendChild(indicatorsGroup);
         
-        // Разделитель (отключен)
-        // innerWrap.appendChild(createSeparator());
+        // Вертикальный разделитель после индикаторов
+        innerWrap.appendChild(createVerticalSeparator());
         
         // Группа 4: Undo/Redo
         const undoRedoGroup = createGroup();
@@ -572,8 +574,8 @@ function initChart(pairId = 1, containerElement = null) {
         fillGroup.className = 'fill-OhqNVIYA group-MBOVGQRI';
         innerWrap.appendChild(fillGroup);
         
-        // Разделитель (отключен)
-        // innerWrap.appendChild(createSeparator());
+        // Вертикальный разделитель перед поиском
+        innerWrap.appendChild(createVerticalSeparator());
         
         // Группа 5: Поиск, настройки, скриншот
         const toolsGroup = createGroup();
@@ -664,7 +666,8 @@ function initChart(pairId = 1, containerElement = null) {
     candleInfoDiv.id = `candleInfo-${pairId}`;
     candleInfoDiv.textContent = 'O 0.00000 H 0.00000 L 0.00000 C 0.00000 +0.0000 (+0.00%)';
     candleInfoDiv.style.pointerEvents = 'auto';
-    candleInfoDiv.style.fontFamily = 'Arial';
+    candleInfoDiv.style.setProperty('font-family', '-apple-system, "system-ui", "Trebuchet MS", Roboto, Ubuntu, sans-serif', 'important');
+    candleInfoDiv.style.setProperty('font-size', '13px', 'important');
     
     chartHeader.appendChild(candleInfoDiv);
     
@@ -851,8 +854,26 @@ function updateCandleInfo(pairId, data) {
     
     const candleInfo = document.getElementById(`candleInfo-${pairId}`);
     if (candleInfo) {
-        candleInfo.textContent = 
-        `O${open} H${high} L${low} C${close} ${sign}${change.toFixed(4)} (${sign}${changePercent}%)`;
+        // Определяем цвет на основе изменения цены
+        const color = change >= 0 ? '#22c55e' : '#ef4444'; // Зеленый для роста, красный для падения
+        
+        // Формируем HTML с окраской только цифр, буквы O H L C остаются обычного цвета
+        const changeText = `${sign}${change.toFixed(4)}`;
+        const percentText = `(${sign}${changePercent}%)`;
+        
+        // Окрашиваем только цифры, буквы O H L C остаются обычного цвета
+        candleInfo.innerHTML = 
+            `O<span style="color: ${color};">${open}</span> H<span style="color: ${color};">${high}</span> L<span style="color: ${color};">${low}</span> C<span style="color: ${color};">${close}</span> <span style="color: ${color};">${changeText}</span> <span style="color: ${color};">${percentText}</span>`;
+        
+        // Устанавливаем шрифт и размер ПОСЛЕ innerHTML (чтобы не сбрасывался при обновлении)
+        // Используем !important через setProperty для гарантии применения
+        candleInfo.style.setProperty('font-family', '-apple-system, "system-ui", "Trebuchet MS", Roboto, Ubuntu, sans-serif', 'important');
+        candleInfo.style.setProperty('font-size', '13px', 'important');
+    }
+    
+    // Обновляем вкладку для отображения потенциального выигрыша в реальном времени
+    if (typeof updateTabForRound === 'function') {
+        updateTabForRound(pairId);
     }
 }
 
@@ -1170,6 +1191,11 @@ function updateLastCandle(pairId, price) {
         lastCandleTime.set(pairId, newCandleTime);
         currentCandleData.set(pairId, {...newBar});
         console.log(`🕯️ [updateLastCandle] NEW CANDLE: time=${newCandleTime}, candleTime=${candleTime}, last.time=${last.time}, normalizedLastTime=${normalizedLastTime}, price=${price}`);
+        
+        // Обновляем вкладку для отображения потенциального выигрыша в реальном времени
+        if (typeof updateTabForRound === 'function') {
+            updateTabForRound(pairId);
+        }
         return;
     }
     
@@ -1205,6 +1231,11 @@ function updateLastCandle(pairId, price) {
         lastCandleTime.set(pairId, updateTime);
         currentCandleData.set(pairId, {...updatedBar});
         console.log(`🕯️ [updateLastCandle] UPDATED: time=${updateTime}, price=${price}, high=${updatedBar.high}, low=${updatedBar.low}`);
+        
+        // Обновляем вкладку для отображения потенциального выигрыша в реальном времени
+        if (typeof updateTabForRound === 'function') {
+            updateTabForRound(pairId);
+        }
         return;
     }
     
@@ -1360,6 +1391,7 @@ function drawOrderLine(pairId, price, orderId, side = 'BUY', orderTime = null, e
         timeEl.style.backgroundColor = '#ffffff';
         timeEl.style.color = isBuy ? '#22c55e' : '#ef4444';
         timeEl.style.fontWeight = '600';
+        timeEl.style.fontFamily = "Arial, Helvetica, sans-serif";
         timeEl.textContent = '00:00';
         
         // Блок суммы: показываем сумму сделки, а не цену входа
@@ -1369,88 +1401,129 @@ function drawOrderLine(pairId, price, orderId, side = 'BUY', orderTime = null, e
         amountEl.style.backgroundColor = isBuy ? '#22c55e' : '#ef4444';
         amountEl.style.color = '#ffffff';
         amountEl.style.fontWeight = '600';
+        amountEl.style.fontFamily = "Arial, Helvetica, sans-serif";
         const displayAmount = (amount != null && !isNaN(amount)) ? amount : price;
-        amountEl.textContent = displayAmount.toFixed(2);
+        amountEl.textContent = `R$ ${displayAmount.toFixed(2)}`;
         
         labelEl.appendChild(timeEl);
         labelEl.appendChild(amountEl);
         containerEl.appendChild(labelEl);
         
-        // Позиционируем по цене
+        // Позиционируем по цене - используем те же координаты, что и линия
+        // Линия создается через createPriceLine и автоматически следует за ценой при масштабировании
+        // Прямоугольник должен использовать priceToCoordinate для синхронизации с линией
         const positionLabel = () => {
-            if (!chartData.candlestickSeries || !labelEl.parentNode) return;
+            if (!chartData.candlestickSeries || !labelEl.parentNode || !line) return;
+            // Используем ту же цену, что и линия, для получения координат
             const y = chartData.candlestickSeries.priceToCoordinate(price);
-            if (y == null) return;
+            if (y == null || isNaN(y)) return;
+            // Прямоугольник привязан к той же Y-координате, что и линия
             labelEl.style.top = `${y}px`;
         };
         positionLabel();
         
         // Обновляем позицию при возможных изменениях масштаба
-        if (chartData.chart && chartData.chart.timeScale) {
-            const ts = chartData.chart.timeScale();
-            if (ts && typeof ts.subscribeVisibleTimeRangeChange === 'function') {
-                ts.subscribeVisibleTimeRangeChange(() => {
-                    positionLabel();
-                });
+        // Используем requestAnimationFrame для плавного обновления, синхронизированного с линией
+        if (chartData.chart) {
+            // Подписка на изменение видимого диапазона времени
+            if (chartData.chart.timeScale) {
+                const ts = chartData.chart.timeScale();
+                if (ts && typeof ts.subscribeVisibleTimeRangeChange === 'function') {
+                    ts.subscribeVisibleTimeRangeChange(() => {
+                        requestAnimationFrame(() => {
+                            positionLabel();
+                        });
+                    });
+                }
             }
 
-            // Поддержка разных версий lightweight-charts:
-            // subscribePriceScaleChange может отсутствовать — проверяем перед вызовом
+            // Подписка на изменение масштаба цены - это ключевое событие для синхронизации с линией
             if (typeof chartData.chart.priceScale === 'function') {
                 const rightScale = chartData.chart.priceScale('right');
                 if (rightScale && typeof rightScale.subscribePriceScaleChange === 'function') {
                     rightScale.subscribePriceScaleChange(() => {
+                        // Используем requestAnimationFrame для синхронизации с рендерингом линии
+                        requestAnimationFrame(() => {
+                            positionLabel();
+                        });
+                    });
+                }
+            }
+            
+            // Подписка на движение курсора для постоянного обновления позиции
+            if (typeof chartData.chart.subscribeCrosshairMove === 'function') {
+                chartData.chart.subscribeCrosshairMove(() => {
+                    // Используем requestAnimationFrame для плавного обновления
+                    requestAnimationFrame(() => {
                         positionLabel();
                     });
+                });
+            }
+            
+            // Подписка на изменение размера графика
+            if (containerEl) {
+                // Используем ResizeObserver для отслеживания изменения размера контейнера
+                if (typeof ResizeObserver !== 'undefined') {
+                    const resizeObserver = new ResizeObserver(() => {
+                        requestAnimationFrame(() => {
+                            positionLabel();
+                        });
+                    });
+                    resizeObserver.observe(containerEl);
+                    
+                    // Сохраняем observer для последующей очистки
+                    if (!chartData.resizeObservers) {
+                        chartData.resizeObservers = new Map();
+                    }
+                    chartData.resizeObservers.set(orderId, resizeObserver);
+                } else {
+                    // Fallback на window resize для старых браузеров
+                    const handleResize = () => {
+                        requestAnimationFrame(() => {
+                            positionLabel();
+                        });
+                    };
+                    window.addEventListener('resize', handleResize);
+                    
+                    // Сохраняем обработчик для последующей очистки
+                    if (!chartData.resizeHandlers) {
+                        chartData.resizeHandlers = new Map();
+                    }
+                    chartData.resizeHandlers.set(orderId, handleResize);
                 }
             }
         }
         
-        // Обратный отсчёт до endTime, если он есть
-        let intervalId = null;
-        if (endTime) {
-            // Преобразуем endTime в Unix timestamp (секунды), если это строка
-            let endTimeSec = endTime;
-            if (typeof endTime === 'string') {
-                endTimeSec = Math.floor(new Date(endTime).getTime() / 1000);
-            } else if (typeof endTime === 'number' && endTime > 1e10) {
-                // Если это миллисекунды, конвертируем в секунды
-                endTimeSec = Math.floor(endTime / 1000);
-            }
+        // Инициализируем таймер с начальным значением
+        // Обновление будет происходить через updateOrderCountdown из startRoundTimer
+        let currentCountdown = endTime; // endTime теперь содержит countdownSeconds
+        
+        // Цвет определяется направлением ордера (BUY - зеленый, SELL - красный)
+        const orderColor = isBuy ? '#22c55e' : '#ef4444';
+        
+        if (currentCountdown && currentCountdown > 0) {
+            // Устанавливаем начальное значение таймера
+            const mm = String(Math.floor(currentCountdown / 60)).padStart(2, '0');
+            const ss = String(currentCountdown % 60).padStart(2, '0');
+            timeEl.textContent = `${mm}:${ss}`;
             
-            const updateCountdown = () => {
-                // ВСЕГДА используем серверное время для расчета
-                const nowSec = window.getServerTimeUTC();
-                
-                // Проверяем, что nowSec валидное число
-                if (isNaN(nowSec)) {
-                    timeEl.textContent = '00:00';
-                    return;
-                }
-                
-                // Вычисляем время до полной минуты (секунды до следующей минуты)
-                const secondsInCurrentMinute = nowSec % 60;
-                const remaining = 60 - secondsInCurrentMinute;
-                const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
-                const ss = String(remaining % 60).padStart(2, '0');
-                timeEl.textContent = `${mm}:${ss}`;
-                
-                // Меняем цвет прямоугольника в зависимости от оставшегося времени
-                // ≤10 секунд - красный, >10 секунд - зеленый
-                const newColor = remaining <= 10 ? '#ef4444' : '#22c55e';
-                const amountEl = labelEl.querySelector('.lc-order-label-amount');
-                if (amountEl) {
-                    amountEl.style.backgroundColor = newColor;
-                }
-                timeEl.style.color = newColor;
-            };
-            updateCountdown();
-            intervalId = setInterval(updateCountdown, 1000);
+            // Устанавливаем цвет на основе направления ордера (статичный, не меняется)
+            const amountEl = labelEl.querySelector('.lc-order-label-amount');
+            if (amountEl) {
+                amountEl.style.backgroundColor = orderColor;
+            }
+            timeEl.style.color = orderColor;
         }
         
         // Сохраняем линию и DOM-элемент (всегда используем строку для orderId для консистентности)
         const orderIdStr = String(orderId);
-        chartData.orderLines.set(orderIdStr, { line, price, side, endTime, labelEl, intervalId });
+        chartData.orderLines.set(orderIdStr, { 
+            line, 
+            price, 
+            side, 
+            countdown: currentCountdown, 
+            labelEl
+        });
     } else {
         if (!chartData.orderLines) {
             chartData.orderLines = new Map();
@@ -1463,68 +1536,41 @@ function drawOrderLine(pairId, price, orderId, side = 'BUY', orderTime = null, e
     console.log(`✅ Order line drawn for order ${orderId} at price ${price}`);
 }
 
-// Функция для обновления цвета линии ордера в зависимости от оставшегося времени
+// Функция для обновления цвета линии ордера (не используется, цвет статичный)
+// Оставлена для обратной совместимости, но не меняет цвет
 function updateOrderLineColor(pairId, orderId, remainingSeconds) {
+    // Цвет определяется направлением ордера при создании и не меняется
+    // BUY - зеленый (#22c55e), SELL - красный (#ef4444)
+    // Эта функция больше не меняет цвет, оставлена для совместимости
+    return;
+}
+
+// Функция для обновления обратного отсчета в прямоугольнике ордера
+function updateOrderCountdown(pairId, orderId, remainingSeconds) {
     const chartData = charts.get(pairId);
     if (!chartData || !chartData.orderLines) {
         return;
     }
     
-    // Всегда используем строковый формат для поиска
     const orderIdStr = String(orderId);
-    let orderLine = chartData.orderLines.get(orderIdStr);
+    const orderLine = chartData.orderLines.get(orderIdStr);
     
-    // Если не найдено, пробуем другие форматы
-    if (!orderLine) {
-        if (typeof orderId === 'number') {
-            orderLine = chartData.orderLines.get(orderId);
-        } else {
-            const numericId = parseInt(orderId, 10);
-            if (!isNaN(numericId)) {
-                orderLine = chartData.orderLines.get(numericId);
-            }
-        }
-    }
-    
-    if (!orderLine || !orderLine.line || !chartData.candlestickSeries) {
+    if (!orderLine || !orderLine.labelEl) {
         return;
     }
     
-    // Определяем цвет: ≤10 секунд - красный, >10 секунд - зеленый
-    const newColor = remainingSeconds <= 10 ? '#ef4444' : '#22c55e';
-    
-    // В Lightweight Charts нельзя изменить цвет существующей линии,
-    // поэтому удаляем старую и создаем новую с правильным цветом
-    const price = orderLine.price;
-    const side = orderLine.side;
-    
-    // Удаляем старую линию
-    chartData.candlestickSeries.removePriceLine(orderLine.line);
-    
-    // Создаем новую линию с правильным цветом
-    const newLine = chartData.candlestickSeries.createPriceLine({
-        price: price,
-        color: newColor,
-        lineWidth: 1,
-        lineStyle: LightweightCharts.LineStyle.Solid,
-        axisLabelVisible: false,
-        title: '',
-    });
-    
-    // Обновляем ссылку на линию
-    orderLine.line = newLine;
-    
-    // Обновляем цвет прямоугольника (если есть)
-    if (orderLine.labelEl) {
-        const amountEl = orderLine.labelEl.querySelector('.lc-order-label-amount');
-        if (amountEl) {
-            amountEl.style.backgroundColor = newColor;
-        }
-        const timeEl = orderLine.labelEl.querySelector('.lc-order-label-time');
-        if (timeEl) {
-            timeEl.style.color = newColor;
-        }
+    const timeEl = orderLine.labelEl.querySelector('.lc-order-label-time');
+    if (!timeEl) {
+        return;
     }
+    
+    // Обновляем только время, цвет не меняем (остается статичным)
+    const mm = String(Math.floor(remainingSeconds / 60)).padStart(2, '0');
+    const ss = String(remainingSeconds % 60).padStart(2, '0');
+    timeEl.textContent = `${mm}:${ss}`;
+    
+    // Цвет остается прежним - определяется направлением ордера (BUY - зеленый, SELL - красный)
+    // Не меняем цвет прямоугольника и линии
 }
 
 // Функция для удаления линии ордера
@@ -1570,6 +1616,27 @@ function removeOrderLine(pairId, orderId) {
             clearInterval(orderLine.intervalId);
             console.log(`✅ [removeOrderLine] Interval cleared`);
         }
+        
+        // Очищаем ResizeObserver, если он был создан
+        if (chartData.resizeObservers) {
+            const resizeObserver = chartData.resizeObservers.get(orderIdStr);
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+                chartData.resizeObservers.delete(orderIdStr);
+                console.log(`✅ [removeOrderLine] ResizeObserver disconnected`);
+            }
+        }
+        
+        // Очищаем обработчики resize, если они были созданы
+        if (chartData.resizeHandlers) {
+            const resizeHandler = chartData.resizeHandlers.get(orderIdStr);
+            if (resizeHandler) {
+                window.removeEventListener('resize', resizeHandler);
+                chartData.resizeHandlers.delete(orderIdStr);
+                console.log(`✅ [removeOrderLine] Resize handler removed`);
+            }
+        }
+        
         // Удаляем по всем возможным ключам (строка и число)
         chartData.orderLines.delete(orderIdStr);
         if (typeof orderId === 'number') {
@@ -1586,6 +1653,14 @@ function removeOrderLine(pairId, orderId) {
     }
 }
 
+function getCurrentPrice(pairId) {
+    const candleData = currentCandleData.get(pairId);
+    if (candleData && typeof candleData.close === 'number' && !isNaN(candleData.close)) {
+        return candleData.close;
+    }
+    return null;
+}
+
 // Экспорт функций
 window.chartModule = {
     initChart,
@@ -1595,6 +1670,8 @@ window.chartModule = {
     drawOrderLine,
     removeOrderLine,
     updateOrderLineColor,
+    updateOrderCountdown,
+    getCurrentPrice,
     getCurrentPairId: () => currentPairId,
     getCurrentTimeframe: () => currentTimeframe,
     getChart: (pairId) => {

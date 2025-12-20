@@ -176,6 +176,24 @@ body {
     font-size: 12px;
 }
 
+#header #tabs .item.loosing .description {
+    color: #f92757;
+    font-weight: bold;
+}
+
+#header #tabs .item.winning .description {
+    color: #08b774;
+    font-weight: bold;
+}
+
+#header #tabs .item.winning[data-v-f02899e6] {
+    background: linear-gradient(180deg, #43e15938, #0000 67%) !important;
+}
+
+#header #tabs .item.loosing[data-v-f02899e6] {
+    background: linear-gradient(180deg, #f973734d, #0000 67%) !important;
+}
+
 #header #tabs .item button,
 #header #tabs .item button.close {
     color: #ffffff70;
@@ -658,7 +676,9 @@ svg {
 
 #candleInfo-31,
 [id^="candleInfo-"] {
-    font-family: Arial;
+    font-family: -apple-system, "system-ui", "Trebuchet MS", Roboto, Ubuntu, sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 500;
 }
 
 .chart-timeframes {
@@ -1325,11 +1345,15 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
 }
 
 @media (max-width: 500px) {
+    #app-container #window .chart,
+    #app-container section[id^="window_"] .chart {
+        height: calc(100% - 220px);
+    }
     #window #rightbar,
     section[id^="window_"] #rightbar {
         position: fixed !important;
         width: 100%;
-        bottom: 27px;
+        bottom: 60px;
         padding: 3px 5px;
         background: #000000;
         z-index: 1000;
@@ -1340,12 +1364,19 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
         display: none;
     }
 
+    #window #rightbar .rb-server-time,
+    section[id^="window_"] #rightbar .rb-server-time {
+        display: none !important;
+    }
+
     #window #rightbar .rb-item,
     section[id^="window_"] #rightbar .rb-item {
         width: calc(50% - 3px);
         display: inline-block;
         position: relative;
         margin: 3px 0 5px 0;
+        height: fit-content;
+        min-height: 40px;
     }
 
     #window #rightbar .rb-item .rb-title,
@@ -1355,11 +1386,14 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
 
     #window #rightbar .rb-item .rb-value,
     section[id^="window_"] #rightbar .rb-item .rb-value {
-        padding: 4px 0;
+        padding: 4px 5px 4px 35px;
         position: absolute;
         right: 5px;
-        top: 0;
+        top: 50%;
+        transform: translateY(-50%);
         text-align: right;
+        width: auto;
+        box-sizing: border-box;
     }
 
     .desktop-only {
@@ -1375,39 +1409,91 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
     #rightbar .rb-item .rb-buttons,
     section[id^="window_"] #rightbar .rb-item .rb-buttons {
         flex-direction: row !important;
-        position: initial !important;
-        height: auto !important;
+        position: absolute !important;
+        left: 5px !important;
+        top: 0 !important;
+        transform: none !important;
+        height: 100% !important;
+        align-items: center !important;
+        /* gap: 3px !important; */
     }
 
     #window #rightbar .rb-item .rb-buttons button,
     section[id^="window_"] #rightbar .rb-item .rb-buttons button {
-        width: initial !important;
+        width: 30px !important;
+        height: 30px !important;
+        min-width: 24px !important;
+        min-height: 24px !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 30px !important;
+        line-height: 1 !important;
     }
 
     #window #rightbar .rb-trade-buttons,
     section[id^="window_"] #rightbar .rb-trade-buttons {
         margin: 0;
         padding: 0;
+        display: flex;
+        flex-direction: row;
+    }
+
+    #window #rightbar .rb-trade-buttons button:first-child,
+    section[id^="window_"] #rightbar .rb-trade-buttons button:first-child {
+        border-top-right-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+    }
+
+    #window #rightbar .rb-trade-buttons button:last-child,
+    section[id^="window_"] #rightbar .rb-trade-buttons button:last-child {
+        border-top-left-radius: 0 !important;
+        border-bottom-left-radius: 0 !important;
     }
 
     #window #rightbar .rb-trade-buttons button,
     section[id^="window_"] #rightbar .rb-trade-buttons button {
         display: flex;
         align-items: center;
-        width: calc(50% - 3px);
-        text-align: left;
+        justify-content: space-between;
+        width: calc(50% - 0.5px);
+        text-align: center;
+        flex: 1;
+        height: 50px;
+        min-height: 50px;
+        padding: 0 15px;
     }
 
-    #window #rightbar .rb-trade-buttons button .mobile-profit,
-    section[id^="window_"] #rightbar .rb-trade-buttons button .mobile-profit {
-        display: block;
-        float: none;
-        margin-right: 8px;
+    #window #rightbar .rb-trade-buttons button.btn-trade-buy,
+    section[id^="window_"] #rightbar .rb-trade-buttons button.btn-trade-buy {
+        justify-content: space-between;
+    }
+
+    #window #rightbar .rb-trade-buttons button.btn-trade-buy text,
+    section[id^="window_"] #rightbar .rb-trade-buttons button.btn-trade-buy text {
+        order: 1;
+    }
+
+    #window #rightbar .rb-trade-buttons button.btn-trade-buy .mobile-profit,
+    section[id^="window_"] #rightbar .rb-trade-buttons button.btn-trade-buy .mobile-profit {
+        order: 2;
+        margin-left: 0;
+        margin-right: 0;
+        font-weight: 600;
+    }
+
+    #window #rightbar .rb-trade-buttons button.btn-trade-sell,
+    section[id^="window_"] #rightbar .rb-trade-buttons button.btn-trade-sell {
+        justify-content: space-between;
     }
 
     #window #rightbar .rb-trade-buttons button.btn-trade-sell .mobile-profit,
     section[id^="window_"] #rightbar .rb-trade-buttons button.btn-trade-sell .mobile-profit {
         order: 1;
+        margin-left: 0;
+        margin-right: 0;
+        font-weight: 600;
     }
 
     #window #rightbar .rb-trade-buttons button.btn-trade-sell text,
@@ -1729,6 +1815,245 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
     }
 }
 
+/* Mobile Account Section */
+#mobile_accounts {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #131313;
+    z-index: 999;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#mobile_accounts #account_details {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 15px;
+    padding-top:5px;
+    cursor: pointer;
+}
+
+#mobile_accounts #account_name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+#mobile_accounts #account_name img {
+    width: 25px;
+    height: 25px;
+}
+
+#mobile_accounts .material-symbols-outlined {
+    color: #fff;
+    font-size: 24px;
+}
+
+/* Mobile Tabs Modal */
+#mobile-tabs {
+    position: fixed;
+    z-index: 1000;
+    background: #131313;
+    bottom: 0;
+    width: 100%;
+    padding: 15px 5px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+#mobile-tabs .title {
+    padding: 8px 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #efefefe3;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1rem;
+    margin-bottom: 10px;
+}
+
+#mobile-tabs .title button {
+    background: transparent;
+    border: none;
+    color: #efefefe3;
+    cursor: pointer;
+    padding: 5px;
+    font-size: 18px;
+}
+
+#mobile-tabs .item {
+    padding: 18px 15px;
+    color: #fff;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1215686275);
+    font-size: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+#mobile-tabs .item.active {
+    background: #ffffff1a;
+    border-color: transparent;
+}
+
+#mobile-tabs .item img {
+    width: 30px;
+    height: 30px;
+    margin-right: 10px;
+}
+
+#mobile-tabs .item button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    padding: 5px;
+    font-size: 16px;
+}
+
+#mobile-tabs .item.add {
+    justify-content: center;
+    color: #fff;
+    border-bottom: none;
+}
+
+#mobile-tabs .item.add i {
+    margin-right: 8px;
+}
+
+/* Desktop only - hide mobile elements */
+@media (min-width: 769px) {
+    .mobile-only {
+        display: none !important;
+    }
+}
+
+/* Mobile Account Section */
+#mobile_accounts {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #000000;
+    z-index: 999;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#mobile_accounts #account_details {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    
+    cursor: pointer;
+}
+
+#mobile_accounts #account_name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+#mobile_accounts #account_name img {
+    width: 25px;
+    height: 25px;
+}
+
+#mobile_accounts .material-symbols-outlined {
+    color: #fff;
+    font-size: 24px;
+}
+
+/* Mobile Tabs Modal */
+#mobile-tabs {
+    position: fixed;
+    z-index: 1000;
+    background: #131313;
+    bottom: 0;
+    width: 100%;
+    padding: 15px 5px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+#mobile-tabs .title {
+    padding: 8px 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #efefefe3;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1rem;
+    margin-bottom: 10px;
+}
+
+#mobile-tabs .title button {
+    background: transparent;
+    border: none;
+    color: #efefefe3;
+    cursor: pointer;
+    padding: 5px;
+    font-size: 18px;
+}
+
+#mobile-tabs .item {
+    padding: 18px 15px;
+    color: #fff;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1215686275);
+    font-size: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+}
+
+#mobile-tabs .item.active {
+    background: #ffffff1a;
+    border-color: transparent;
+}
+
+#mobile-tabs .item img {
+    width: 30px;
+    height: 30px;
+    margin-right: 10px;
+}
+
+#mobile-tabs .item button {
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    padding: 5px;
+    font-size: 16px;
+}
+
+#mobile-tabs .item.add {
+    justify-content: center;
+    color: #fff;
+    border-bottom: none;
+}
+
+#mobile-tabs .item.add i {
+    margin-right: 8px;
+}
+
+/* Desktop only - hide mobile elements */
+@media (min-width: 769px) {
+    .mobile-only {
+        display: none !important;
+    }
+}
+
 /* Стили для неактивных иконок волатильности */
 .volatility-icon {
     opacity: 0.3 !important;
@@ -1743,4 +2068,27 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
 
 .button-KTgbfaP5.isActive-KTgbfaP5 .bg-KTgbfaP5 {
     color: rgba(41, 98, 255, 1);
+}
+
+/* Стили для всплывашек результатов ордеров */
+#traderoom-alerts .tr-alert {
+    border: 1px solid #ffffff14;
+    background: rgba(19, 23, 34, 1);
+    background: linear-gradient(220deg, rgba(40, 48, 70, 1) 0%, rgba(19, 23, 34, 1) 100%);
+    -webkit-box-shadow: 0px 0px 15px 0px rgba(0, 0, 0, 0.75);
+    -moz-box-shadow: 0px 0px 15px 0px rgba(0, 0, 0, 0.75);
+    box-shadow: 0px 0px 15px 0px rgba(0, 0, 0, 0.75);
+    margin: 10px 0;
+    padding: 23px;
+    position: relative;
+    cursor: pointer;
+    min-width: 200px;
+    width: auto;
+}
+
+#traderoom-alerts .tr-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
 }
