@@ -424,6 +424,127 @@ body {
     height: 100%;
 }
 
+/* Layout 2 - 2 графика в ряд (горизонтально) */
+#windows.layout_2 {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+}
+
+#windows.layout_2 section[id^="window_"] {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+}
+
+/* Layout 2 Split - 2 графика вертикально */
+#windows.layout_2_split {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+}
+
+#windows.layout_2_split section[id^="window_"] {
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+}
+
+/* Layout 3 - 3 графика (2 сверху по полам, 1 снизу на всю ширину) */
+#windows.layout_3 {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    height: 100%;
+}
+
+/* Первые два окна в верхней строке (по 50% ширины, 50% высоты) */
+#windows.layout_3 section[id^="window_"]:nth-child(1),
+#windows.layout_3 section[id^="window_"]:nth-child(2) {
+    flex: 0 0 50%;
+    width: 50%;
+    height: 50%;
+    min-width: 50%;
+    max-width: 50%;
+}
+
+/* Третье окно на всю ширину снизу (100% ширины, 50% высоты) */
+#windows.layout_3 section[id^="window_"]:nth-child(3) {
+    flex: 0 0 100%;
+    width: 100%;
+    height: 50%;
+    min-width: 100%;
+    max-width: 100%;
+}
+
+/* Остальные окна на всю ширину */
+#windows.layout_3 section[id^="window_"]:nth-child(n+4) {
+    flex: 0 0 100%;
+    width: 100%;
+    height: 50%;
+    min-width: 100%;
+    max-width: 100%;
+}
+
+/* Layout 3 Alt - 3 графика (1 сверху на всю ширину, 2 снизу по полам) */
+#windows.layout_3_alt {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    height: 100%;
+}
+
+/* Первое окно на всю ширину сверху (100% ширины, 50% высоты) */
+#windows.layout_3_alt section[id^="window_"]:nth-child(1) {
+    flex: 0 0 100%;
+    width: 100%;
+    height: 50%;
+    min-width: 100%;
+    max-width: 100%;
+}
+
+/* Второе и третье окна делят нижнюю половину (50% ширины, 50% высоты) */
+#windows.layout_3_alt section[id^="window_"]:nth-child(2),
+#windows.layout_3_alt section[id^="window_"]:nth-child(3) {
+    flex: 0 0 50%;
+    width: 50%;
+    height: 50%;
+    min-width: 50%;
+    max-width: 50%;
+}
+
+/* Остальные окна делят пространство */
+#windows.layout_3_alt section[id^="window_"]:nth-child(n+4) {
+    flex: 0 0 50%;
+    width: 50%;
+    height: 50%;
+    min-width: 50%;
+    max-width: 50%;
+}
+
+/* Layout 4 - 4 графика (2x2 - 2 сверху и 2 снизу, ровная сетка) */
+#windows.layout_4 {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: 100%;
+    height: 100%;
+}
+
+#windows.layout_4 section[id^="window_"] {
+    flex: 0 0 50%;
+    width: 50%;
+    height: 50%;
+    min-width: 50%;
+    max-width: 50%;
+    min-height: 50%;
+    max-height: 50%;
+}
+
 #window,
 section[id^="window_"] {
     height: 100%;
@@ -1166,7 +1287,7 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
     background-color: #000000; /* Черный фон */
     margin: 10% auto;
     padding: 30px;
-    border: none;
+    border: 2px solid #ffffffb0;
     width: 90%;
     max-width: 500px;
     border-radius: 0;
@@ -1368,7 +1489,7 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
         display: none !important;
     }
     #header #tabs #menuIcon {
-        display: none !important;
+        display: block !important;
     }
 
     #app-container #window .chart,
@@ -2216,4 +2337,467 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
     align-items: center;
     gap: 12px;
     width: 100%;
+}
+
+/* Leftbar Menu Styles */
+#app-container #leftbar {
+    display: none;
+    width: 90px;
+    height: 100%;
+    overflow: auto;
+    position: absolute;
+    z-index: 1001;
+    padding-bottom: 25px;
+    top: 0;
+    left: 0;
+}
+
+#app-container #window, #app-container #leftbar, .traderoom-modal {
+    background: #000000;
+}
+
+#app-container #leftbar ul li {
+    display: block;
+    text-align: center;
+}
+
+#app-container #leftbar ul li a {
+    display: block;
+    text-decoration: none;
+    color: #ffffff73;
+    font-size: 12px;
+    padding: 12px 5px;
+}
+
+#app-container #leftbar ul li a .zli {
+    display: block;
+    font-size: 28px;
+    margin-bottom: 4px;
+}
+
+#app-container #leftbar ul li a:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Layout Modal Styles */
+.modal-body {
+    position: relative;
+    -ms-flex: 1 1 auto;
+    flex: 1 1 auto;
+    padding: 1rem;
+}
+
+.modal-body-login {
+    background: #000000;
+    margin: 5% auto;
+    padding: 30px;
+    border: none;
+    width: 90%;
+    max-width: 300px;
+    border-radius: 0;
+    position: relative;
+    z-index: 10001 !important;
+}
+
+/* Layout Modal - затемненный фон вместо черного */
+#layoutModal.traderoom-modal {
+    background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+.modal-body-login .cancel {
+    background: transparent;
+    color: #ffffffb0;
+    border: 0;
+    border-radius: 500px;
+    padding: 5px;
+    float: right;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    width: 30px;
+    height: 30px;
+}
+
+.modal-body-login .cancel:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#chart-options {
+    color: #FFF;
+    min-width: 170px;
+    overflow: auto;
+}
+
+#chart-options .title {
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 13px;
+    background: #ffffff29;
+    padding: 14px 5px;
+    text-align: center;
+}
+
+#chart-options ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#chart-options ul li {
+    list-style: none;
+    padding: 11px 6px;
+    border-bottom: 1px solid #ffffff14;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#chart-options ul li.active {
+    background: #abd704;
+    color: #000;
+}
+
+#chart-options ul li:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#chart-options ul li .zli {
+    font-size: 20px;
+}
+
+#chart-options ul li .zli.r90 {
+    transform: rotate(90deg);
+}
+
+#chart-options ul li .zli.r-90 {
+    transform: rotate(-90deg);
+}
+
+/* History Modal Styles */
+.traderoom-modal .h-title {
+    font-weight: bold;
+    font-size: 21px;
+    padding: 6px 0;
+    color: #FFF;
+}
+
+.traderoom-modal .h-positions {
+    margin-top: 20px;
+    max-height: 65%;
+    overflow-y: auto;
+}
+
+.traderoom-modal .h-positions .h-item {
+    display: flex;
+    padding: 13px 10px;
+    border-bottom: 1px solid #ffffff14;
+    align-items: center;
+}
+
+.traderoom-modal .h-positions .h-time {
+    flex: 1;
+    max-width: 70px;
+    text-align: center;
+    font-size: 14px;
+    font-family: Arial;
+}
+
+.traderoom-modal .h-positions .h-time div {
+    font-size: 12px;
+    color: #ffffff7a;
+    margin-top: 2px;
+}
+
+.traderoom-modal .h-positions .h-symbol {
+    flex: 6;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.traderoom-modal .h-positions .h-symbol img {
+    width: 24px;
+    height: 24px;
+}
+
+.traderoom-modal .h-positions .h-symbol .h-description {
+    font-size: 12px;
+    color: #ffffff7a;
+    font-weight: 400 !important;
+    margin-top: 2px;
+}
+
+.traderoom-modal .h-positions .h-result {
+    flex: 3;
+    text-align: right;
+    font-size: 13px;
+    font-family: Arial;
+    color: #ffffff7a;
+}
+
+.traderoom-modal .h-positions .h-result b {
+    display: block;
+    font-size: 16px;
+    font-weight: 300;
+    font-family: Arial;
+}
+
+.text-gray {
+    color: #ffffff7a !important;
+}
+
+.mr-2 {
+    margin-right: 8px;
+}
+
+.traderoom-modal .text-center {
+    text-align: center !important;
+    margin-top: 20px;
+    padding: 10px 0;
+}
+
+.traderoom-modal .btn {
+    background: transparent;
+    border: 1px solid #ffffff29;
+    color: #fff;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.traderoom-modal .btn:hover:not(.disabled) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.traderoom-modal .btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Ranking Modal Styles */
+.ranking-list {
+    margin-top: 20px;
+}
+
+.ranking-list .item {
+    display: flex;
+    align-items: center;
+    padding: 10px 0;
+}
+
+.ranking-list .item:nth-child(odd) {
+    background: #ffffff12;
+}
+
+.ranking-list .item .position {
+    flex: 0 0 40px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+.ranking-list .item .img {
+    flex: 0 0 60px;
+    position: relative;
+    margin-right: 15px;
+}
+
+.ranking-list .item .img img {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.ranking-list .item .img .vip-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px 0;
+    border-radius: 50px;
+    margin: -13px 0 0;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    display: block;
+}
+
+.ranking-list .item .ranking-data {
+    flex: 4;
+    color: #ffffffe3;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.ranking-list .item .ranking-data div {
+    font-size: 12px;
+    color: #ffffff7a;
+    font-weight: 400;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ranking-list .item .ranking-data div .material-symbols-outlined {
+    font-size: 16px;
+}
+
+.ranking-list .item button {
+    background: transparent;
+    border: 1px solid #ffffff29;
+    color: #fff;
+    padding: 8px 16px;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+}
+
+.ranking-list .item button:hover:not(.disabled) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.ranking-list .item button.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ranking-list .item button .material-symbols-outlined {
+    font-size: 16px;
+}
+
+/* My Account Modal Styles */
+.trm-section-content .internal-min {
+    margin: 0 auto !important;
+}
+
+.card {
+    position: relative;
+    display: -ms-flexbox;
+    display: flex;
+    -ms-flex-direction: column;
+    flex-direction: column;
+    min-width: 0;
+    word-wrap: break-word;
+    background-color: #fff;
+    background-clip: border-box;
+    border: 1px solid rgba(0, 0, 0, .125);
+    border-radius: .25rem;
+}
+
+.traderoom-modal .card {
+    border: 0 !important;
+    background: transparent !important;
+}
+
+.card-body {
+    -ms-flex: 1 1 auto;
+    flex: 1 1 auto;
+    min-height: 1px;
+    padding: 1.25rem;
+}
+
+.table-responsive {
+    display: block;
+    width: 60%;
+    margin-left: 20%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.traderoom-modal .card-body {
+    background: #ffffff0f !important;
+}
+
+.internal input[disabled],
+.internal input[readonly] {
+    background-color: #e9ecef61 !important;
+    opacity: 1;
+}
+
+.internal input[disabled][data-v-bb8879ee],
+.internal input[readonly][data-v-bb8879ee] {
+    background-color: #e9ecef26 !important;
+    opacity: 1;
+}
+
+.form-control:disabled,
+.form-control[readonly] {
+    background-color: #e9ecef;
+    opacity: 1;
+}
+
+.traderoom-modal .label {
+    color: #ffffff;
+    font-size: 14px;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.traderoom-modal .site-inputs {
+    background: #ffffff0f;
+    border: 1px solid #ffffff29;
+    color: #ffffff;
+    padding: 10px;
+    width: 100%;
+    border-radius: 5px;
+}
+
+.traderoom-modal .site-inputs:focus {
+    background: #ffffff14;
+    border-color: #ffffff40;
+    color: #ffffff;
+    outline: none;
+}
+
+.traderoom-modal .site-inputs::placeholder {
+    color: #ffffff7a;
+}
+
+.traderoom-modal .btn-primary {
+    background: #08b774;
+    border-color: #08b774;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.traderoom-modal .btn-primary:hover:not(.disabled) {
+    background: #089f65;
+    border-color: #089f65;
+}
+
+.traderoom-modal .btn-primary.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.traderoom-modal .btn-block {
+    display: block;
+    width: 100%;
+}
+
+.traderoom-modal .btn-flat {
+    border-radius: 0;
+}
+
+.traderoom-modal .mb-2 {
+    margin-bottom: 0.5rem;
+}
+
+.traderoom-modal .cp-terminal {
+    min-height: 20px;
 }

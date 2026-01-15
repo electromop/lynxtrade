@@ -19,6 +19,14 @@ def index():
         return send_from_directory(FRONTEND_DIR, 'index.html')
     except Exception as e:
         return f"Error loading index.html: {str(e)}", 404
+    
+@app.route('/traderoom')
+def index_traderoom():
+    """Главная страница с графиком"""
+    try:
+        return send_from_directory(FRONTEND_DIR, 'index.html')
+    except Exception as e:
+        return f"Error loading index.html: {str(e)}", 404
 
 @app.route('/admin')
 def admin():

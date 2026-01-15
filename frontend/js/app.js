@@ -547,6 +547,178 @@ setInterval(async () => {
 function setupEventListeners() {
     console.log('🔧 Setting up event listeners...');
     
+    // Открытие/закрытие левого меню
+    const menuIcon = document.getElementById('menuIcon');
+    const leftbar = document.getElementById('leftbar');
+    
+    if (menuIcon && leftbar) {
+        menuIcon.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            if (leftbar.style.display === 'block') {
+                leftbar.style.display = 'none';
+            } else {
+                leftbar.style.display = 'block';
+            }
+        });
+    }
+    
+    // Открытие модального окна Layout
+    if (leftbar) {
+        const layoutItems = leftbar.querySelectorAll('li');
+        layoutItems.forEach(li => {
+            const link = li.querySelector('a');
+            if (link) {
+                const span = link.querySelector('.material-symbols-outlined');
+                if (span && span.textContent === 'dashboard') {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openLayoutModal();
+                    });
+                }
+                // Открытие модального окна History
+                if (span && span.textContent === 'history') {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openHistoryModal();
+                    });
+                }
+                // Открытие модального окна Ranking
+                if (span && span.textContent === 'crown') {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openRankingModal();
+                    });
+                }
+                // Открытие модального окна My Account
+                if (span && span.textContent === 'account_circle') {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        openMyAccountModal();
+                    });
+                }
+            }
+        });
+    }
+    
+    // Закрытие модального окна Layout
+    const closeLayoutModalBtn = document.getElementById('closeLayoutModal');
+    if (closeLayoutModalBtn) {
+        closeLayoutModalBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeLayoutModalFunc();
+        });
+    }
+    
+    // Закрытие модального окна Layout при клике вне его
+    window.addEventListener('click', (e) => {
+        const layoutModal = document.getElementById('layoutModal');
+        if (layoutModal && e.target === layoutModal) {
+            closeLayoutModalFunc();
+        }
+        const historyModal = document.getElementById('historyModal');
+        if (historyModal && e.target === historyModal) {
+            closeHistoryModalFunc();
+        }
+        const rankingModal = document.getElementById('rankingModal');
+        if (rankingModal && e.target === rankingModal) {
+            closeRankingModalFunc();
+        }
+    });
+    
+    // Закрытие модального окна History
+    const closeHistoryModalBtn = document.getElementById('closeHistoryModal');
+    if (closeHistoryModalBtn) {
+        closeHistoryModalBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeHistoryModalFunc();
+        });
+    }
+    
+    // Обновление истории
+    const refreshHistoryBtn = document.getElementById('refreshHistory');
+    if (refreshHistoryBtn) {
+        refreshHistoryBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            loadHistory(currentHistoryPage);
+        });
+    }
+    
+    // Пагинация истории
+    const historyPrevBtn = document.getElementById('historyPrevBtn');
+    const historyNextBtn = document.getElementById('historyNextBtn');
+    
+    if (historyPrevBtn) {
+        historyPrevBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (currentHistoryPage > 1) {
+                loadHistory(currentHistoryPage - 1);
+            }
+        });
+    }
+    
+    if (historyNextBtn) {
+        historyNextBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            loadHistory(currentHistoryPage + 1);
+        });
+    }
+    
+    // Обработка выбора layout (добавляем обработчики после загрузки DOM)
+    setTimeout(() => {
+        const layoutOptions = document.querySelectorAll('#chart-options ul li[data-layout]');
+        layoutOptions.forEach(option => {
+            option.addEventListener('click', (e) => {
+                e.preventDefault();
+                const layout = option.getAttribute('data-layout');
+                selectLayout(layout);
+                // Обновляем активный класс
+                layoutOptions.forEach(li => li.classList.remove('active'));
+                option.classList.add('active');
+            });
+        });
+        
+        // Переключение периода рейтинга
+        const rankingMenuItems = document.querySelectorAll('#rankingMenuDesktop a, #rankingMenuMobile a');
+        rankingMenuItems.forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                const period = item.getAttribute('data-period');
+                selectRankingPeriod(period);
+            });
+        });
+        
+        // Переключение секций в My Account
+        const accountMenuItems = document.querySelectorAll('#accountMenuDesktop a, #accountMenuMobile a');
+        accountMenuItems.forEach(item => {
+            const section = item.getAttribute('data-section');
+            if (section) {
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    selectAccountSection(section);
+                });
+            }
+        });
+    }, 100);
+    
+    // Закрытие модального окна My Account
+    const closeMyAccountModalBtn = document.getElementById('closeMyAccountModal');
+    if (closeMyAccountModalBtn) {
+        closeMyAccountModalBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeMyAccountModalFunc();
+        });
+    }
+    
     // Добавление пары
     const addPairBtn = document.getElementById('addPairBtn');
     if (addPairBtn) {
@@ -692,6 +864,20 @@ function updateSelectedPair(activePair) {
         switchToPair(activePair.id);
     } else if (selectedPairs.length > 0) {
         switchToPair(selectedPairs[0].id);
+    }
+    
+    // Применяем текущий layout ко всем окнам
+    applyCurrentLayout();
+    
+    // Убеждаемся, что rightbar для активного окна видим после применения layout
+    if (activePairId) {
+        const activeWindowData = pairWindows.get(activePairId);
+        if (activeWindowData) {
+            const rightbar = activeWindowData.windowElement.querySelector('#rightbar');
+            if (rightbar) {
+                rightbar.style.display = '';
+            }
+        }
     }
 }
 
@@ -1016,6 +1202,12 @@ function createWindow(pair) {
     // Сохраняем chartId в элементе окна
     window.setAttribute('data-chart-id', chartId);
     
+    // Скрываем rightbar по умолчанию (пока график не выбран)
+    const rightbar = window.querySelector('#rightbar');
+    if (rightbar) {
+        rightbar.style.display = 'none';
+    }
+    
     // Настраиваем обработчики событий для rightbar
     setupRightbarHandlers(window, pair.id);
     
@@ -1111,14 +1303,32 @@ function switchToPair(pairId) {
     // Сохраняем активную пару
     saveSelectedPairs();
     
-    // Обновляем вкладки
+    // Обновляем вкладки и rightbar
+    const windowsContainer = document.getElementById('windows');
+    const currentLayoutClass = windowsContainer ? Array.from(windowsContainer.classList).find(cls => cls.startsWith('layout_')) : 'layout_1';
+    const isMultiLayout = currentLayoutClass && currentLayoutClass !== 'layout_1';
+    
     pairWindows.forEach((data, id) => {
+        const rightbar = data.windowElement.querySelector('#rightbar');
         if (id === pairId) {
             data.tabElement.classList.add('active');
             data.windowElement.classList.add('active');
+            // Показываем rightbar для активного окна
+            if (rightbar) {
+                rightbar.style.display = '';
+            }
         } else {
             data.tabElement.classList.remove('active');
             data.windowElement.classList.remove('active');
+            // В layout_1 скрываем rightbar для неактивных окон
+            // В других layout'ах показываем rightbar для всех видимых окон
+            if (rightbar) {
+                if (isMultiLayout) {
+                    rightbar.style.display = '';
+                } else {
+                    rightbar.style.display = 'none';
+                }
+            }
         }
     });
     
@@ -1447,6 +1657,521 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function closeAddPairModal() {
     document.getElementById('addPairModal').style.display = 'none';
+}
+
+// Функции для работы с модальным окном Layout
+function openLayoutModal() {
+    const modal = document.getElementById('layoutModal');
+    if (modal) {
+        modal.style.display = 'block';
+    }
+}
+
+function closeLayoutModalFunc() {
+    const modal = document.getElementById('layoutModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Сохраняем текущий layout
+let currentLayout = 'layout_1';
+
+function applyCurrentLayout() {
+    if (currentLayout) {
+        selectLayout(currentLayout, false); // false = не закрывать модальное окно
+    }
+}
+
+function selectLayout(layoutName, closeModal = true) {
+    const windowsContainer = document.getElementById('windows');
+    if (!windowsContainer) return;
+    
+    // Сохраняем текущий layout
+    currentLayout = layoutName;
+    
+    // Удаляем все классы layout
+    windowsContainer.classList.remove('layout_1', 'layout_2', 'layout_2_split', 'layout_3', 'layout_3_alt', 'layout_4');
+    
+    // Добавляем выбранный layout
+    windowsContainer.classList.add(layoutName);
+    
+    // Получаем все окна
+    const windows = windowsContainer.querySelectorAll('section[id^="window_"]');
+    
+    if (layoutName === 'layout_1') {
+        // Для layout_1 показываем только активное окно
+        windows.forEach(win => {
+            const rightbar = win.querySelector('#rightbar');
+            if (win.classList.contains('active')) {
+                win.style.display = 'flex';
+                // Показываем rightbar только для активного окна
+                if (rightbar) {
+                    rightbar.style.display = '';
+                }
+            } else {
+                win.style.display = 'none';
+                // Скрываем rightbar для неактивных окон
+                if (rightbar) {
+                    rightbar.style.display = 'none';
+                }
+            }
+        });
+    } else {
+        // Для других layout'ов показываем все окна и применяем правильные стили
+        windows.forEach((win, index) => {
+            const rightbar = win.querySelector('#rightbar');
+            
+            win.style.display = 'flex';
+            // Сбрасываем все специфичные стили
+            win.style.flex = '';
+            win.style.width = '';
+            win.style.height = '';
+            win.style.minWidth = '';
+            win.style.maxWidth = '';
+            win.style.minHeight = '';
+            win.style.maxHeight = '';
+            win.style.flexDirection = '';
+            
+            // В layout'ах с несколькими графиками показываем rightbar для всех видимых окон
+            if (rightbar) {
+                rightbar.style.display = '';
+            }
+        });
+        
+        // Применяем специфичные стили для layout_3 и layout_3_alt
+        if (layoutName === 'layout_3') {
+            // Для layout_3: 2 сверху по полам, 1 снизу на всю ширину
+            windows.forEach((win, index) => {
+                if (index < 2) {
+                    // Первые два окна делят верхнюю половину (50% ширины, 50% высоты)
+                    win.style.flex = '0 0 50%';
+                    win.style.width = '50%';
+                    win.style.height = '50%';
+                    win.style.minWidth = '50%';
+                    win.style.maxWidth = '50%';
+                } else if (index === 2) {
+                    // Третье окно на всю ширину снизу (100% ширины, 50% высоты)
+                    win.style.flex = '0 0 100%';
+                    win.style.width = '100%';
+                    win.style.height = '50%';
+                    win.style.minWidth = '100%';
+                    win.style.maxWidth = '100%';
+                } else {
+                    // Остальные окна также на всю ширину
+                    win.style.flex = '0 0 100%';
+                    win.style.width = '100%';
+                    win.style.height = '50%';
+                    win.style.minWidth = '100%';
+                    win.style.maxWidth = '100%';
+                }
+            });
+        } else if (layoutName === 'layout_3_alt') {
+            // Для layout_3_alt: 1 сверху на всю ширину, 2 снизу по полам
+            windows.forEach((win, index) => {
+                if (index === 0) {
+                    // Первое окно на всю ширину сверху (100% ширины, 50% высоты)
+                    win.style.flex = '0 0 100%';
+                    win.style.width = '100%';
+                    win.style.height = '50%';
+                    win.style.minWidth = '100%';
+                    win.style.maxWidth = '100%';
+                } else if (index < 3) {
+                    // Второе и третье окна делят нижнюю половину (50% ширины, 50% высоты)
+                    win.style.flex = '0 0 50%';
+                    win.style.width = '50%';
+                    win.style.height = '50%';
+                    win.style.minWidth = '50%';
+                    win.style.maxWidth = '50%';
+                } else {
+                    // Остальные окна также делят пространство
+                    win.style.flex = '0 0 50%';
+                    win.style.width = '50%';
+                    win.style.height = '50%';
+                    win.style.minWidth = '50%';
+                    win.style.maxWidth = '50%';
+                }
+            });
+        }
+    }
+    
+    console.log(`📐 Layout changed to: ${layoutName}, windows count: ${windows.length}`);
+    
+    // Закрываем модальное окно только если нужно
+    if (closeModal) {
+        closeLayoutModalFunc();
+    }
+}
+
+// Функции для работы с модальным окном History
+function openHistoryModal() {
+    const modal = document.getElementById('historyModal');
+    if (modal) {
+        modal.style.display = 'block';
+        // Загружаем историю
+        loadHistory();
+    }
+}
+
+function closeHistoryModalFunc() {
+    const modal = document.getElementById('historyModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+async function loadHistory(page = 1) {
+    try {
+        const transactionsTable = document.getElementById('binary-transactions-table');
+        if (!transactionsTable) return;
+        
+        // Показываем загрузку
+        transactionsTable.innerHTML = '<div style="text-align: center; padding: 20px; color: #ffffff7a;">Loading...</div>';
+        
+        // Убеждаемся, что API_BASE установлен
+        if (!window.API_BASE) {
+            window.API_BASE = window.location.origin + '/api';
+        }
+        
+        // Пытаемся получить историю с сервера
+        const url = `${window.API_BASE}/rounds/history?user_id=1&page=${page}`;
+        console.log('📜 Fetching history from:', url);
+        
+        try {
+            const response = await fetch(url);
+            if (response.ok) {
+                const data = await response.json();
+                // Обрабатываем ответ от сервера
+                if (data.transactions && Array.isArray(data.transactions)) {
+                    displayHistory(data.transactions);
+                    // Обновляем кнопки пагинации
+                    updateHistoryPagination(data.page, data.total_pages);
+                } else if (Array.isArray(data)) {
+                    // Если сервер вернул просто массив
+                    displayHistory(data);
+                } else {
+                    displayHistory([]);
+                }
+                return;
+            }
+        } catch (error) {
+            console.warn('⚠️ History endpoint not available, using mock data:', error);
+        }
+        
+        // Если endpoint не доступен, используем моковые данные
+        const mockHistory = generateMockHistory();
+        displayHistory(mockHistory);
+        
+    } catch (error) {
+        console.error('❌ Error loading history:', error);
+        const transactionsTable = document.getElementById('binary-transactions-table');
+        if (transactionsTable) {
+            transactionsTable.innerHTML = '<div style="text-align: center; padding: 20px; color: #ff4444;">Error loading history</div>';
+        }
+    }
+}
+
+function displayHistory(transactions) {
+    const transactionsTable = document.getElementById('binary-transactions-table');
+    if (!transactionsTable) return;
+    
+    if (transactions.length === 0) {
+        transactionsTable.innerHTML = '<div style="text-align: center; padding: 20px; color: #ffffff7a;">No transactions found</div>';
+        return;
+    }
+    
+    transactionsTable.innerHTML = transactions.map(transaction => {
+        const date = new Date(transaction.end_time || transaction.start_time || Date.now());
+        const time = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        
+        const profit = transaction.profit || 0;
+        const amount = transaction.amount || 0;
+        const win = transaction.win !== undefined ? transaction.win : (profit > 0);
+        const direction = transaction.direction || 'BUY';
+        
+        const profitClass = win ? 'text-buy' : (profit === 0 ? 'text-gray' : 'text-sell');
+        const profitSign = win ? '+' : '-';
+        const profitValue = win ? profit : (profit === 0 ? amount : amount);
+        
+        const symbol = transaction.symbol || 'BTCUSDT';
+        const symbolIcon = getSymbolIcon(symbol);
+        
+        const directionIcon = direction === 'BUY' ? 'fa-caret-up text-buy' : 'fa-caret-down text-sell';
+        
+        return `
+            <div data-v-318d9519="" class="h-item">
+                <div data-v-318d9519="" class="h-time">
+                    ${time}
+                    <div data-v-318d9519="">${dateStr}</div>
+                </div>
+                <div data-v-318d9519="" class="h-symbol">
+                    <img data-v-318d9519="" src="${symbolIcon}" alt="${symbol}">
+                    ${symbol}
+                    <div data-v-318d9519="" class="h-description">Crypto</div>
+                </div>
+                <div data-v-318d9519="" class="h-result">
+                    <b data-v-318d9519="" class="${profitClass}">${profit === 0 ? '' : profitSign}R$ ${profitValue.toFixed(2).replace('.', ',')}</b>
+                    R$ ${amount.toFixed(2).replace('.', ',')}
+                    <i data-v-318d9519="" class="fa ${directionIcon}"></i>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function generateMockHistory() {
+    // Генерируем моковые данные для истории
+    const symbols = ['BTCUSDT', 'BNBUSDT', 'ETHUSDT'];
+    const history = [];
+    const now = Date.now();
+    
+    for (let i = 0; i < 10; i++) {
+        const time = now - (i * 3600000); // Каждый час назад
+        const symbol = symbols[Math.floor(Math.random() * symbols.length)];
+        const amount = Math.random() * 50 + 5; // От 5 до 55
+        const win = Math.random() > 0.3; // 70% выигрышей
+        const profit = win ? amount * 0.85 : 0;
+        
+        history.push({
+            id: i + 1,
+            symbol: symbol,
+            amount: amount,
+            profit: profit,
+            win: win,
+            direction: Math.random() > 0.5 ? 'BUY' : 'SELL',
+            end_time: time,
+            start_time: time - 60000
+        });
+    }
+    
+    return history;
+}
+
+function getSymbolIcon(symbol) {
+    // Получаем иконку символа
+    const symbolLower = symbol.toLowerCase();
+    if (symbolLower.includes('btc')) {
+        return 'https://zlincontent.com/cdn/icons/symbols/bitcoin.png';
+    } else if (symbolLower.includes('bnb')) {
+        return 'https://zlincontent.com/cdn/icons/symbols/bnb.png';
+    } else if (symbolLower.includes('eth')) {
+        return 'https://zlincontent.com/cdn/icons/symbols/ethereum.png';
+    }
+    return 'https://zlincontent.com/cdn/icons/symbols/bitcoin.png';
+}
+
+let currentHistoryPage = 1;
+
+function updateHistoryPagination(currentPage, totalPages) {
+    currentHistoryPage = currentPage;
+    const prevBtn = document.getElementById('historyPrevBtn');
+    const nextBtn = document.getElementById('historyNextBtn');
+    
+    if (prevBtn) {
+        if (currentPage <= 1) {
+            prevBtn.classList.add('disabled');
+        } else {
+            prevBtn.classList.remove('disabled');
+        }
+    }
+    
+    if (nextBtn) {
+        if (currentPage >= totalPages) {
+            nextBtn.classList.add('disabled');
+        } else {
+            nextBtn.classList.remove('disabled');
+        }
+    }
+}
+
+// Функции для работы с модальным окном Ranking
+let currentRankingPeriod = 'monthly';
+
+function openRankingModal() {
+    const modal = document.getElementById('rankingModal');
+    if (modal) {
+        modal.style.display = 'block';
+        // Загружаем рейтинг
+        loadRanking(currentRankingPeriod);
+    }
+}
+
+function closeRankingModalFunc() {
+    const modal = document.getElementById('rankingModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function selectRankingPeriod(period) {
+    currentRankingPeriod = period;
+    
+    // Обновляем активный класс в меню
+    const menuItems = document.querySelectorAll('#rankingMenuDesktop a, #rankingMenuMobile a');
+    menuItems.forEach(item => {
+        if (item.getAttribute('data-period') === period) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+    
+    // Загружаем рейтинг для выбранного периода
+    loadRanking(period);
+}
+
+function loadRanking(period = 'monthly') {
+    const rankingList = document.getElementById('rankingList');
+    if (!rankingList) return;
+    
+    // Показываем загрузку
+    rankingList.innerHTML = '<div style="text-align: center; padding: 20px; color: #ffffff7a;">Loading...</div>';
+    
+    // Генерируем рандомные данные
+    setTimeout(() => {
+        const rankingData = generateRankingData(period);
+        displayRanking(rankingData);
+    }, 300);
+}
+
+function generateRankingData(period) {
+    const names = [
+        'Eliete S.', 'Samara B.', 'Aline C.', 'Fernanda S.', 'Juliana G.',
+        'Anderson D.', 'Ernani R.', 'Rodrigo C.', 'Carlos M.', 'Paulo R.',
+        'Maria L.', 'Ana P.', 'João S.', 'Pedro A.', 'Lucas F.'
+    ];
+    
+    const vipLevels = [
+        { name: 'VIP', bg: 'rgb(255, 251, 0)', color: 'rgb(0, 0, 0)' },
+        { name: 'BASIC', bg: 'rgb(214, 209, 209)', color: 'rgb(0, 0, 0)' },
+        { name: 'PLATINUM', bg: 'rgb(76, 0, 255)', color: 'rgb(10, 10, 10)' },
+        { name: '--', bg: 'rgb(0, 0, 0)', color: 'rgb(255, 255, 255)' }
+    ];
+    
+    const avatars = [
+        'https://staketech.s3.us-east-1.amazonaws.com/cdn/avatars/1306169-L1cPvAvkhi.jpg',
+        'https://staketech.s3.us-east-1.amazonaws.com/cdn/avatars/1305889-IlI8n2goXL.jpg',
+        'https://staketech.s3.us-east-1.amazonaws.com/cdn/avatars/0.jpg',
+        'https://staketech.s3.us-east-1.amazonaws.com/cdn/avatars/1305777-X2mIqwnYtX.jpg',
+        'https://staketech.s3.us-east-1.amazonaws.com/cdn/avatars/1306892-YePGKOUpRz.jpg',
+        'https://staketech.s3.us-east-1.amazonaws.com/cdn/avatars/1305780-v57i3visDQ.jpg'
+    ];
+    
+    // Генерируем разные суммы в зависимости от периода
+    let maxAmount = 1000000;
+    if (period === 'today') {
+        maxAmount = 100000;
+    } else if (period === 'weekly') {
+        maxAmount = 500000;
+    }
+    
+    const ranking = [];
+    const usedNames = new Set();
+    
+    for (let i = 0; i < 15; i++) {
+        let name;
+        do {
+            name = names[Math.floor(Math.random() * names.length)];
+        } while (usedNames.has(name) && usedNames.size < names.length);
+        usedNames.add(name);
+        
+        const amount = Math.random() * maxAmount + (maxAmount * 0.1);
+        const vipLevel = vipLevels[Math.floor(Math.random() * vipLevels.length)];
+        const avatar = avatars[Math.floor(Math.random() * avatars.length)];
+        
+        ranking.push({
+            position: i + 1,
+            name: name,
+            amount: amount,
+            vipLevel: vipLevel,
+            avatar: avatar
+        });
+    }
+    
+    // Сортируем по сумме (от большего к меньшему)
+    ranking.sort((a, b) => b.amount - a.amount);
+    ranking.forEach((item, index) => {
+        item.position = index + 1;
+    });
+    
+    return ranking;
+}
+
+function displayRanking(rankingData) {
+    const rankingList = document.getElementById('rankingList');
+    if (!rankingList) return;
+    
+    if (rankingData.length === 0) {
+        rankingList.innerHTML = '<div style="text-align: center; padding: 20px; color: #ffffff7a;">No ranking data</div>';
+        return;
+    }
+    
+    rankingList.innerHTML = rankingData.map(item => {
+        const formattedAmount = item.amount.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        
+        return `
+            <div data-v-686e40f0="" class="item">
+                <div data-v-686e40f0="" class="position">${item.position}</div>
+                <div data-v-686e40f0="" class="img">
+                    <img data-v-686e40f0="" src="${item.avatar}" alt="${item.name}">
+                    <span data-v-686e40f0="" class="vip-badge" style="background: ${item.vipLevel.bg}; color: ${item.vipLevel.color};">${item.vipLevel.name}</span>
+                </div>
+                <div data-v-686e40f0="" class="ranking-data">
+                    ${item.name}
+                    <div data-v-686e40f0="">
+                        <span data-v-686e40f0="" class="material-symbols-outlined" translate="no">trending_up</span>
+                        R$ ${formattedAmount}
+                    </div>
+                </div>
+                <button data-v-686e40f0="" class="disabled">
+                    <span data-v-686e40f0="" class="material-symbols-outlined" translate="no">podcasts</span>
+                    Copy
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+// Функции для работы с модальным окном My Account
+function openMyAccountModal() {
+    const modal = document.getElementById('myAccountModal');
+    if (modal) {
+        modal.style.display = 'block';
+        // Показываем секцию My Data по умолчанию
+        selectAccountSection('my-data');
+    }
+}
+
+function closeMyAccountModalFunc() {
+    const modal = document.getElementById('myAccountModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+function selectAccountSection(sectionName) {
+    // Обновляем активный класс в меню
+    const menuItems = document.querySelectorAll('#accountMenuDesktop a, #accountMenuMobile a');
+    menuItems.forEach(item => {
+        if (item.getAttribute('data-section') === sectionName) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+    
+    // Показываем соответствующую секцию контента
+    const sections = document.querySelectorAll('#myAccountModal .trm-section-content');
+    sections.forEach(section => {
+        if (section.getAttribute('data-section') === sectionName) {
+            section.style.display = 'block';
+        } else {
+            section.style.display = 'none';
+        }
+    });
+    
+    console.log(`📋 Account section changed to: ${sectionName}`);
 }
 
 function updateTimeDisplay(pairId = null) {

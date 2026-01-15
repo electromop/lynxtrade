@@ -131,6 +131,46 @@
         </div>
         
         <div class="admin-section">
+            <label for="balanceInput">Текущий баланс аккаунта</label>
+            <input 
+                type="number" 
+                id="balanceInput" 
+                class="win-rate-input" 
+                min="0" 
+                step="0.01"
+                value="10000"
+            >
+            <div class="win-rate-info">
+                <div>Установите текущий баланс пользователя</div>
+            </div>
+        </div>
+        
+        <div class="admin-section">
+            <label for="topupAmountInput">Пополнение баланса</label>
+            <div style="display: flex; gap: 10px;">
+                <input 
+                    type="number" 
+                    id="topupAmountInput" 
+                    class="win-rate-input" 
+                    min="0" 
+                    step="0.01"
+                    placeholder="Сумма пополнения"
+                    style="flex: 1;"
+                >
+                <button 
+                    class="save-btn" 
+                    id="topupBtn" 
+                    style="width: auto; padding: 12px 24px; flex-shrink: 0;"
+                >
+                    Пополнить
+                </button>
+            </div>
+            <div class="win-rate-info" style="margin-top: 10px;">
+                <div>Введите сумму для пополнения баланса</div>
+            </div>
+        </div>
+        
+        <div class="admin-section">
             <label for="winRateInput">Процент выигрыша (0-100)</label>
             <input 
                 type="number" 
@@ -157,24 +197,82 @@
         // Используем API_BASE из config.js, если доступен
         const API_BASE = window.API_BASE || window.location.origin + '/api';
         
-        // Загрузка текущего значения
-        async function loadWinRate() {
+        // Загрузка текущих значений
+        async function loadSettings() {
             try {
-                const response = await fetch(`${API_BASE}/admin/win-rate`);
-                const data = await response.json();
-                document.getElementById('winRateInput').value = data.win_rate;
+                // Загружаем баланс
+                const balanceResponse = await fetch(`${API_BASE}/admin/balance`);
+                if (balanceResponse.ok) {
+                    const balanceData = await balanceResponse.json();
+                    document.getElementById('balanceInput').value = balanceData.balance;
+                }
+                
+                // Загружаем процент выигрыша
+                const winRateResponse = await fetch(`${API_BASE}/admin/win-rate`);
+                if (winRateResponse.ok) {
+                    const winRateData = await winRateResponse.json();
+                    document.getElementById('winRateInput').value = winRateData.win_rate;
+                }
             } catch (error) {
-                console.error('Error loading win rate:', error);
+                console.error('Error loading settings:', error);
                 showMessage('Ошибка загрузки данных', 'error');
             }
         }
         
-        // Сохранение значения
-        async function saveWinRate() {
+        // Пополнение баланса
+        async function topupBalance() {
+            const amount = parseFloat(document.getElementById('topupAmountInput').value);
+            
+            if (isNaN(amount) || amount <= 0) {
+                showMessage('Сумма пополнения должна быть положительным числом', 'error');
+                return;
+            }
+            
+            const topupBtn = document.getElementById('topupBtn');
+            topupBtn.disabled = true;
+            topupBtn.textContent = 'Пополнение...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin/balance/topup`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ amount: amount }),
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    // Обновляем поле баланса
+                    document.getElementById('balanceInput').value = data.balance;
+                    // Очищаем поле пополнения
+                    document.getElementById('topupAmountInput').value = '';
+                    showMessage(`Баланс успешно пополнен на ${amount}. Новый баланс: ${data.balance}`, 'success');
+                } else {
+                    const error = await response.json();
+                    showMessage(error.error || 'Ошибка при пополнении баланса', 'error');
+                }
+            } catch (error) {
+                console.error('Error topping up balance:', error);
+                showMessage('Ошибка при пополнении баланса', 'error');
+            } finally {
+                topupBtn.disabled = false;
+                topupBtn.textContent = 'Пополнить';
+            }
+        }
+        
+        // Сохранение значений
+        async function saveSettings() {
+            const balance = parseFloat(document.getElementById('balanceInput').value);
             const winRate = parseInt(document.getElementById('winRateInput').value);
             
+            if (isNaN(balance) || balance < 0) {
+                showMessage('Баланс должен быть положительным числом', 'error');
+                return;
+            }
+            
             if (isNaN(winRate) || winRate < 0 || winRate > 100) {
-                showMessage('Введите число от 0 до 100', 'error');
+                showMessage('Введите процент выигрыша от 0 до 100', 'error');
                 return;
             }
             
@@ -183,7 +281,23 @@
             saveBtn.textContent = 'Сохранение...';
             
             try {
-                const response = await fetch(`${API_BASE}/admin/win-rate`, {
+                // Сохраняем баланс
+                const balanceResponse = await fetch(`${API_BASE}/admin/balance`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ balance: balance }),
+                });
+                
+                if (!balanceResponse.ok) {
+                    const error = await balanceResponse.json();
+                    showMessage(error.error || 'Ошибка при сохранении баланса', 'error');
+                    return;
+                }
+                
+                // Сохраняем процент выигрыша
+                const winRateResponse = await fetch(`${API_BASE}/admin/win-rate`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -191,14 +305,15 @@
                     body: JSON.stringify({ win_rate: winRate }),
                 });
                 
-                if (response.ok) {
-                    showMessage('Настройки успешно сохранены', 'success');
-                } else {
-                    const error = await response.json();
-                    showMessage(error.error || 'Ошибка при сохранении', 'error');
+                if (!winRateResponse.ok) {
+                    const error = await winRateResponse.json();
+                    showMessage(error.error || 'Ошибка при сохранении процента выигрыша', 'error');
+                    return;
                 }
+                
+                showMessage('Настройки успешно сохранены', 'success');
             } catch (error) {
-                console.error('Error saving win rate:', error);
+                console.error('Error saving settings:', error);
                 showMessage('Ошибка при сохранении', 'error');
             } finally {
                 saveBtn.disabled = false;
@@ -217,16 +332,29 @@
         }
         
         // Обработчики событий
-        document.getElementById('saveBtn').addEventListener('click', saveWinRate);
+        document.getElementById('saveBtn').addEventListener('click', saveSettings);
+        document.getElementById('topupBtn').addEventListener('click', topupBalance);
+        
+        document.getElementById('balanceInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                saveSettings();
+            }
+        });
+        
+        document.getElementById('topupAmountInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                topupBalance();
+            }
+        });
         
         document.getElementById('winRateInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                saveWinRate();
+                saveSettings();
             }
         });
         
         // Загрузка при инициализации
-        loadWinRate();
+        loadSettings();
     </script>
 </body>
 </html>

@@ -5,7 +5,7 @@
     'use strict';
     
     // Продакшн URL
-    const PRODUCTION_URL = 'http://45.12.255.196:5500';
+    const PRODUCTION_URL = 'http://127.0.0.1:5500';
     
     // Определяем базовый URL
     // Если мы на продакшн сервере, используем его URL

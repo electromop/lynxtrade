@@ -217,6 +217,105 @@ def get_active_rounds():
     conn.close()
     return jsonify(rounds)
 
+@api.route('/rounds/history', methods=['GET'])
+def get_rounds_history():
+    """Получить историю завершенных раундов пользователя"""
+    user_id = request.args.get('user_id', 1, type=int)
+    page = request.args.get('page', 1, type=int)
+    limit = request.args.get('limit', 20, type=int)
+    offset = (page - 1) * limit
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Получаем завершенные раунды с результатами
+    cursor.execute('''
+        SELECT r.id, r.pair_id, r.direction, r.amount, r.duration, 
+               r.start_time, r.end_time, r.start_price, 
+               tp.symbol, tp.name,
+               rr.win, rr.profit, rr.end_price as result_end_price
+        FROM rounds r
+        JOIN trading_pairs tp ON r.pair_id = tp.id
+        LEFT JOIN round_results rr ON r.id = rr.round_id
+        WHERE r.user_id = ? AND r.status = 'finished'
+        ORDER BY r.end_time DESC
+        LIMIT ? OFFSET ?
+    ''', (user_id, limit, offset))
+    
+    transactions = []
+    for row in cursor.fetchall():
+        # Конвертируем end_time в Unix timestamp (миллисекунды)
+        end_time = row[6]
+        if end_time:
+            if isinstance(end_time, str):
+                try:
+                    end_time_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                except:
+                    try:
+                        end_time_dt = datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S.%f')
+                    except:
+                        end_time_dt = datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S')
+                end_time_ms = int(end_time_dt.timestamp() * 1000)
+            elif hasattr(end_time, 'timestamp'):
+                end_time_ms = int(end_time.timestamp() * 1000)
+            else:
+                end_time_ms = end_time
+        else:
+            end_time_ms = None
+        
+        # Конвертируем start_time в Unix timestamp (миллисекунды)
+        start_time = row[5]
+        if start_time:
+            if isinstance(start_time, str):
+                try:
+                    start_time_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                except:
+                    try:
+                        start_time_dt = datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S.%f')
+                    except:
+                        start_time_dt = datetime.strptime(start_time, '%Y-%m-%d %H:%M:%S')
+                start_time_ms = int(start_time_dt.timestamp() * 1000)
+            elif hasattr(start_time, 'timestamp'):
+                start_time_ms = int(start_time.timestamp() * 1000)
+            else:
+                start_time_ms = start_time
+        else:
+            start_time_ms = None
+        
+        transactions.append({
+            'id': row[0],
+            'pair_id': row[1],
+            'direction': row[2],
+            'amount': float(row[3]),
+            'duration': row[4],
+            'start_time': start_time_ms,
+            'end_time': end_time_ms,
+            'start_price': float(row[7]) if row[7] else None,
+            'symbol': row[8],
+            'name': row[9],
+            'win': bool(row[10]) if row[10] is not None else None,
+            'profit': float(row[11]) if row[11] is not None else 0.0,
+            'end_price': float(row[12]) if row[12] else None
+        })
+    
+    # Получаем общее количество записей для пагинации
+    cursor.execute('''
+        SELECT COUNT(*) 
+        FROM rounds r
+        WHERE r.user_id = ? AND r.status = 'finished'
+    ''', (user_id,))
+    total_count = cursor.fetchone()[0]
+    
+    conn.close()
+    
+    return jsonify({
+        'transactions': transactions,
+        'page': page,
+        'limit': limit,
+        'total': total_count,
+        'total_pages': (total_count + limit - 1) // limit
+    })
+
 @api.route('/rounds/<int:round_id>/finish', methods=['POST'])
 def finish_round(round_id):
     """Завершить раунд с результатом от клиента"""
@@ -448,6 +547,102 @@ def set_win_rate():
     conn.close()
     
     return jsonify({'win_rate': win_rate})
+
+@api.route('/admin/balance', methods=['GET'])
+def get_admin_balance():
+    """Получить баланс пользователя для админки"""
+    user_id = request.args.get('user_id', 1, type=int)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return jsonify({'balance': row[0]})
+    return jsonify({'error': 'User not found'}), 404
+
+@api.route('/admin/balance', methods=['POST'])
+def set_admin_balance():
+    """Установить баланс пользователя"""
+    data = request.json
+    balance = data.get('balance')
+    user_id = data.get('user_id', 1)
+    
+    if balance is None:
+        return jsonify({'error': 'balance is required'}), 400
+    
+    try:
+        balance = float(balance)
+        if balance < 0:
+            return jsonify({'error': 'balance must be positive'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'error': 'balance must be a number'}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Проверяем существование пользователя
+    cursor.execute('SELECT id FROM users WHERE id = ?', (user_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return jsonify({'error': 'User not found'}), 404
+    
+    # Обновляем баланс
+    cursor.execute('UPDATE users SET balance = ? WHERE id = ?', (balance, user_id))
+    conn.commit()
+    
+    # Получаем обновленный баланс
+    cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
+    updated_balance = cursor.fetchone()[0]
+    conn.close()
+    
+    return jsonify({'balance': updated_balance})
+
+@api.route('/admin/balance/topup', methods=['POST'])
+def topup_balance():
+    """Пополнить баланс пользователя (добавить сумму к текущему балансу)"""
+    data = request.json
+    amount = data.get('amount')
+    user_id = data.get('user_id', 1)
+    
+    if amount is None:
+        return jsonify({'error': 'amount is required'}), 400
+    
+    try:
+        amount = float(amount)
+        if amount <= 0:
+            return jsonify({'error': 'amount must be positive'}), 400
+    except (ValueError, TypeError):
+        return jsonify({'error': 'amount must be a number'}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Проверяем существование пользователя и получаем текущий баланс
+    cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'error': 'User not found'}), 404
+    
+    current_balance = user[0]
+    new_balance = current_balance + amount
+    
+    # Обновляем баланс
+    cursor.execute('UPDATE users SET balance = ? WHERE id = ?', (new_balance, user_id))
+    conn.commit()
+    
+    # Получаем обновленный баланс для подтверждения
+    cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
+    updated_balance = cursor.fetchone()[0]
+    conn.close()
+    
+    return jsonify({
+        'balance': updated_balance,
+        'added': amount,
+        'previous_balance': current_balance
+    })
 
 from utils import get_current_price
 

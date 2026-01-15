@@ -73,6 +73,21 @@
 
             <!-- App Container -->
             <section id="app-container">
+                <section data-v-f02899e6="" id="leftbar">
+                    <ul data-v-f02899e6="">
+                        <li data-v-f02899e6=""><a data-v-f02899e6="" class="text-buy"><span data-v-f02899e6="" class="material-symbols-outlined zli text-buy" translate="no">attach_money</span> Deposit</a></li>
+                        <li data-v-f02899e6=""><a data-v-f02899e6=""><span data-v-f02899e6="" class="material-symbols-outlined zli" translate="no">add</span> Symbols</a></li>
+                        <li data-v-f02899e6="" class="desktop-only"><a data-v-f02899e6=""><span data-v-f02899e6="" class="material-symbols-outlined zli" translate="no">dashboard</span> Layout</a></li>
+                        <li data-v-f02899e6=""><a data-v-f02899e6=""><span data-v-f02899e6="" class="material-symbols-outlined zli" translate="no">analytics</span> Charts</a></li>
+                        <li data-v-f02899e6=""><a data-v-f02899e6=""><span data-v-f02899e6="" class="material-symbols-outlined zli" translate="no">history</span> History</a></li>
+                        <li data-v-f02899e6=""><a data-v-f02899e6=""><span data-v-f02899e6="" class="material-symbols-outlined zli" translate="no">account_circle</span> My Account</a></li>
+                        <li data-v-f02899e6=""><a data-v-f02899e6=""><span data-v-f02899e6="" class="material-symbols-outlined zli" translate="no">campaign</span> Promotions</a></li>
+                        <li data-v-f02899e6=""><a data-v-f02899e6=""><span data-v-f02899e6="" class="material-symbols-outlined zli" translate="no">crown</span> Ranking</a></li>
+                        <li data-v-f02899e6=""><a data-v-f02899e6=""><span data-v-f02899e6="" class="material-symbols-outlined zli" translate="no">podcasts</span> Signals</a></li>
+                        <li data-v-f02899e6=""><a data-v-f02899e6="" href="https://t.me/suportelynxtrade" data-no-inertia="" target="_blank"><span data-v-f02899e6="" class="material-symbols-outlined zli" translate="no">chat</span> Support</a></li>
+                        <li data-v-f02899e6=""><a data-v-f02899e6="" href="https://lynxtrade.io/logout" data-no-inertia=""><span data-v-f02899e6="" class="material-symbols-outlined zli" translate="no">logout</span> Logout</a></li>
+                    </ul>
+                </section>
                 <div class="menu-overlay"></div>
                 <section id="windows" class="layout_1">
                     
@@ -137,6 +152,161 @@
                                     <!-- Pairs will be added dynamically -->
                                 </tbody>
                             </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layout Modal -->
+    <div data-v-1954d3dc="" data-v-f02899e6="" class="traderoom-modal" id="layoutModal">
+        <div data-v-1954d3dc="" class="modal-body modal-body-login text-white">
+            <button data-v-a849e800="" class="cancel" id="closeLayoutModal">
+                <span data-v-a849e800="" class="material-symbols-outlined zli" translate="no">close</span>
+            </button>
+            <section data-v-1954d3dc="" id="chart-options">
+                <div data-v-1954d3dc="" class="co-panels" data-target="chart-layout">
+                    <div data-v-1954d3dc="" class="title">Chart Layout</div>
+                    <ul data-v-1954d3dc="">
+                        <li data-v-1954d3dc="" class="active" data-windows="1" data-layout="layout_1">
+                            <span data-v-1954d3dc="" class="material-symbols-outlined zli">crop_square</span> 1 chart
+                        </li>
+                        <li data-v-1954d3dc="" data-windows="2" data-layout="layout_2_split">
+                            <span data-v-1954d3dc="" class="material-symbols-outlined zli">splitscreen</span> 2 charts
+                        </li>
+                        <li data-v-1954d3dc="" data-windows="2" data-layout="layout_2">
+                            <span data-v-1954d3dc="" class="material-symbols-outlined zli">view_column_2</span> 2 charts
+                        </li>
+                        <li data-v-1954d3dc="" data-windows="3" data-layout="layout_3_alt">
+                            <span data-v-1954d3dc="" class="material-symbols-outlined zli r-90">space_dashboard</span> 3 charts
+                        </li>
+                        <li data-v-1954d3dc="" data-windows="3" data-layout="layout_3">
+                            <span data-v-1954d3dc="" class="material-symbols-outlined zli r90">space_dashboard</span> 3 charts
+                        </li>
+                        <li data-v-1954d3dc="" data-windows="4" data-layout="layout_4">
+                            <span data-v-1954d3dc="" class="material-symbols-outlined zli">window</span> 4 charts
+                        </li>
+                    </ul>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div data-v-318d9519="" data-v-f02899e6="" class="traderoom-modal" id="historyModal">
+        <div data-v-318d9519="" class="trm-content expanded">
+            <button data-v-318d9519="" class="cancel" id="closeHistoryModal">
+                <span data-v-318d9519="" class="material-symbols-outlined zli" translate="no">close</span>
+            </button>
+            <button data-v-318d9519="" class="cancel mr-2" id="refreshHistory">
+                <span data-v-318d9519="" class="material-symbols-outlined zli" translate="no">sync</span>
+            </button>
+            <div data-v-318d9519="" class="h-title">Transaction History</div>
+            <div data-v-318d9519="" class="h-positions" id="binary-transactions-table">
+                <!-- History items will be added dynamically -->
+            </div>
+            <div data-v-318d9519="" class="text-center">
+                <button data-v-318d9519="" class="btn btn-sm text-white mr-1 disabled" id="historyPrevBtn">
+                    <i data-v-318d9519="" class="fa fa-caret-left"></i> &nbsp; Previous
+                </button>
+                <button data-v-318d9519="" class="btn btn-sm text-white ml-1" id="historyNextBtn">
+                    Next &nbsp; <i data-v-318d9519="" class="fa fa-caret-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ranking Modal -->
+    <div data-v-686e40f0="" data-v-f02899e6="" class="traderoom-modal" id="rankingModal">
+        <div data-v-686e40f0="" class="trm-content expanded">
+            <button data-v-686e40f0="" class="cancel" id="closeRankingModal">
+                <span data-v-686e40f0="" class="material-symbols-outlined zli" translate="no">close</span>
+            </button>
+            <button data-v-686e40f0="" class="cancel mr-2" id="refreshRanking">
+                <span data-v-686e40f0="" class="material-symbols-outlined zli" translate="no">sync</span>
+            </button>
+            <div data-v-686e40f0="" class="h-title">Ranking</div>
+            <div data-v-686e40f0="" class="row mt-4">
+                <div data-v-686e40f0="" class="col-12 col-lg-3">
+                    <ul data-v-686e40f0="" class="trm-menu d-none d-lg-block" id="rankingMenuDesktop">
+                        <li data-v-686e40f0=""><a data-v-686e40f0="" class="" data-period="today"><span data-v-686e40f0="" class="zli material-symbols-outlined" translate="no">today</span> Today</a></li>
+                        <li data-v-686e40f0=""><a data-v-686e40f0="" class="" data-period="weekly"><span data-v-686e40f0="" class="zli material-symbols-outlined" translate="no">date_range</span> Weekly</a></li>
+                        <li data-v-686e40f0=""><a data-v-686e40f0="" class="active" data-period="monthly"><span data-v-686e40f0="" class="zli material-symbols-outlined" translate="no">calendar_month</span> Monthly</a></li>
+                    </ul>
+                    <ul data-v-686e40f0="" class="trm-menu mobile-menu d-block d-lg-none" id="rankingMenuMobile">
+                        <li data-v-686e40f0=""><a data-v-686e40f0="" class="" data-period="today"><span data-v-686e40f0="" class="zli material-symbols-outlined" translate="no">today</span> Today</a></li>
+                        <li data-v-686e40f0=""><a data-v-686e40f0="" class="" data-period="weekly"><span data-v-686e40f0="" class="zli material-symbols-outlined" translate="no">date_range</span> Weekly</a></li>
+                        <li data-v-686e40f0=""><a data-v-686e40f0="" class="active" data-period="monthly"><span data-v-686e40f0="" class="zli material-symbols-outlined" translate="no">calendar_month</span> Monthly</a></li>
+                    </ul>
+                </div>
+                <div data-v-686e40f0="" class="col-12 col-lg-9">
+                    <section data-v-686e40f0="" class="trm-section-content">
+                        <div data-v-686e40f0="" class="ranking-list" id="rankingList">
+                            <!-- Ranking items will be added dynamically -->
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- My Account Modal -->
+    <div data-v-bb8879ee="" data-v-f02899e6="" class="traderoom-modal" id="myAccountModal">
+        <div data-v-bb8879ee="" class="trm-content expanded">
+            <button data-v-bb8879ee="" class="cancel" id="closeMyAccountModal">
+                <span data-v-bb8879ee="" class="material-symbols-outlined zli" translate="no">close</span>
+            </button>
+            <div data-v-bb8879ee="" class="h-title">My Account</div>
+            <div data-v-bb8879ee="" class="row mt-4">
+                <div data-v-bb8879ee="" class="col-12 col-lg-3">
+                    <ul data-v-bb8879ee="" class="trm-menu d-none d-lg-block" id="accountMenuDesktop">
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="active" data-section="my-data"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">account_circle</span> My Data</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="" data-section="deposits"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">arrow_upward</span> Deposits</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="" data-section="withdraws"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">arrow_downward</span> Withdraws</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" href="https://lynxtrade.io/account/verify" data-no-inertia="" target="_blank"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">admin_panel_settings</span> Verify Account</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="" data-section="avatar"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">account_box</span> Change Avatar</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="" data-section="referral"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">groups_3</span> Referral</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="" data-section="password"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">key</span> Change Password</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="" data-section="settings"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">settings</span> Settings</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" href="https://lynxtrade.io/logout" data-no-inertia=""><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">logout</span> Logout</a></li>
+                    </ul>
+                    <ul data-v-bb8879ee="" class="trm-menu mobile-menu d-block d-lg-none" id="accountMenuMobile">
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="active" data-section="my-data"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">account_circle</span> My Data</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="" data-section="deposits"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">arrow_upward</span> Deposits</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="" data-section="withdraws"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">arrow_downward</span> Withdraws</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" href="https://lynxtrade.io/account/verify" data-no-inertia="" target="_blank"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">admin_panel_settings</span> Verify Account</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="" data-section="avatar"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">account_box</span> Change Avatar</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="" data-section="referral"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">groups_3</span> Referral</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="" data-section="password"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">key</span> Change Password</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" class="" data-section="settings"><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">settings</span> Settings</a></li>
+                        <li data-v-bb8879ee=""><a data-v-bb8879ee="" href="https://lynxtrade.io/logout" data-no-inertia=""><span data-v-bb8879ee="" class="zli material-symbols-outlined" translate="no">logout</span> Logout</a></li>
+                    </ul>
+                </div>
+                <div data-v-bb8879ee="" class="col-12 col-lg-9">
+                    <section data-v-bb8879ee="" class="trm-section-content" data-section="my-data">
+                        <div data-v-bb8879ee="" class="card internal internal-min">
+                            <div data-v-bb8879ee="" class="card-body table-responsive">
+                                <div data-v-bb8879ee="" class="mb-2 cp-terminal"></div>
+                                <div data-v-bb8879ee="" class="label">Name</div>
+                                <input data-v-bb8879ee="" type="text" class="form-control form-control-md form-control-solid site-inputs mb-2" disabled="" placeholder="Name">
+                                <div data-v-bb8879ee="" class="label">Document</div>
+                                <input data-v-bb8879ee="" type="text" class="form-control form-control-md form-control-solid site-inputs mb-2" disabled="" placeholder="Document">
+                                <div data-v-bb8879ee="" class="label">Birthdate</div>
+                                <input data-v-bb8879ee="" type="text" class="form-control form-control-md form-control-solid site-inputs mb-2" disabled="" placeholder="Birthdate">
+                                <div data-v-bb8879ee="" class="label">Login</div>
+                                <input data-v-bb8879ee="" type="text" class="form-control form-control-md form-control-solid site-inputs mb-2" disabled="" placeholder="Login">
+                                <div data-v-bb8879ee="" class="label">Last login</div>
+                                <input data-v-bb8879ee="" type="text" class="form-control form-control-md form-control-solid site-inputs mb-2" disabled="" placeholder="Last login">
+                                <br data-v-bb8879ee="">
+                                <div data-v-bb8879ee="" class="label">Email</div>
+                                <input data-v-bb8879ee="" type="email" class="form-control form-control-md form-control-solid site-inputs mb-2" placeholder="Email">
+                                <div data-v-bb8879ee="" class="label">Phone</div>
+                                <input data-v-bb8879ee="" type="text" class="form-control form-control-md form-control-solid site-inputs mb-2" placeholder="Phone">
+                                <button data-v-bb8879ee="" type="button" class="btn btn-primary btn-flat btn-block disabled">
+                                    <i class="fa fa-check"></i> &nbsp; Update profile
+                                </button>
+                            </div>
                         </div>
                     </section>
                 </div>
