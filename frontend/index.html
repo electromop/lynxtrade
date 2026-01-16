@@ -57,7 +57,7 @@
                                     </div>
                                 </b>
                             </div>
-                            <a data-v-f02899e6="">
+                            <a data-v-f02899e6="" id="account_switch_btn" style="cursor: pointer;">
                                 <span data-v-f02899e6="" class="material-symbols-outlined zli" translate="no">expand_all</span>
                             </a>
                         </div>
@@ -309,6 +309,26 @@
                             </div>
                         </div>
                     </section>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Switch Modal -->
+    <div id="accountSwitchModal" class="traderoom-modal" style="display: none;">
+        <div class="trm-content">
+            <button class="cancel" id="closeAccountModal">
+                <span class="material-symbols-outlined zli" translate="no">close</span>
+            </button>
+            <button class="cancel mr-2" id="refreshAccountModal" style="right: 60px;">
+                <span class="material-symbols-outlined zli" translate="no">sync</span>
+            </button>
+            <div class="h-title">Contas de Operação</div>
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="list-menu" id="accountsList">
+                        <!-- Аккаунты будут добавлены динамически -->
+                    </div>
                 </div>
             </div>
         </div>

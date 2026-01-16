@@ -1489,7 +1489,12 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
         display: none !important;
     }
     #header #tabs #menuIcon {
-        display: block !important;
+        display: none !important;
+    }
+    
+    /* Скрыть lmi-type на мобильном */
+    .lmi-type {
+        display: none !important;
     }
 
     #app-container #window .chart,
@@ -2557,6 +2562,57 @@ section[id^="window_"] #rightbar .rb-trade-buttons .bg-buy {
 
 .mr-2 {
     margin-right: 8px;
+}
+
+/* Account Switch Modal Styles */
+.traderoom-modal .trm-content .list-menu {
+    text-align: center;
+}
+
+.traderoom-modal .trm-content .list-menu .lm-item.active, 
+.traderoom-modal .trm-content .list-menu .lm-item:hover {
+    background: #ffffff12;
+    cursor: pointer;
+}
+
+.traderoom-modal .trm-content .list-menu .lm-item .lmi-name {
+    flex: 5;
+    color: #FFF;
+    text-align: left!important;
+    padding-left: 10px!important;
+}
+
+.traderoom-modal .trm-content .list-menu .lm-item .lmi-type {
+    flex: 2;
+}
+
+.traderoom-modal .trm-content .list-menu .lm-item .lmi-amount {
+    flex: 2;
+    font-family: Arial!important;
+    min-width: 145px;
+}
+
+.traderoom-modal .trm-content .list-menu .lm-item .lmi-actions {
+    text-align: right;
+    padding-right: 10px!important;
+}
+
+.traderoom-modal .trm-content .list-menu .lm-item .lmi-actions button {
+    background: #ffffff2e;
+    color: #FFF;
+    border: 0;
+    padding: 7px 7px;
+    border-radius: 50px;
+    margin-left: 5px;
+}
+
+.traderoom-modal .trm-content .list-menu .lm-item {
+    display: flex;
+    color: #ffffffc4;
+    align-items: center;
+    justify-content: center;
+    font-family: Arial;
+    padding: 10px 0;
 }
 
 .traderoom-modal .text-center {

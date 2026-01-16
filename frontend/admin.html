@@ -131,7 +131,25 @@
         </div>
         
         <div class="admin-section">
-            <label for="balanceInput">Текущий баланс аккаунта</label>
+            <label for="accountTypeSelect">Выберите аккаунт</label>
+            <select id="accountTypeSelect" class="win-rate-input" style="margin-bottom: 15px;">
+                <option value="demo">Демо аккаунт</option>
+                <option value="real">Реальный аккаунт</option>
+            </select>
+            <div id="accountBalances" style="margin-bottom: 15px;">
+                <div style="padding: 10px; background: #1e2330; border-radius: 6px; margin-bottom: 10px;">
+                    <div style="color: #8b8fa3; font-size: 12px;">Демо аккаунт</div>
+                    <div style="color: #fff; font-size: 16px; font-weight: 600;" id="demoBalance">Загрузка...</div>
+                </div>
+                <div style="padding: 10px; background: #1e2330; border-radius: 6px;">
+                    <div style="color: #8b8fa3; font-size: 12px;">Реальный аккаунт</div>
+                    <div style="color: #fff; font-size: 16px; font-weight: 600;" id="realBalance">Загрузка...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="admin-section">
+            <label for="balanceInput">Текущий баланс выбранного аккаунта</label>
             <input 
                 type="number" 
                 id="balanceInput" 
@@ -141,7 +159,7 @@
                 value="10000"
             >
             <div class="win-rate-info">
-                <div>Установите текущий баланс пользователя</div>
+                <div>Установите текущий баланс для выбранного аккаунта</div>
             </div>
         </div>
         
@@ -200,8 +218,21 @@
         // Загрузка текущих значений
         async function loadSettings() {
             try {
-                // Загружаем баланс
-                const balanceResponse = await fetch(`${API_BASE}/admin/balance`);
+                // Загружаем список аккаунтов
+                const accountsResponse = await fetch(`${API_BASE}/admin/accounts?user_id=1`);
+                if (accountsResponse.ok) {
+                    const accounts = await accountsResponse.json();
+                    accounts.forEach(account => {
+                        const balanceEl = document.getElementById(`${account.account_type}Balance`);
+                        if (balanceEl) {
+                            balanceEl.textContent = `R$ ${account.balance.toFixed(2).replace('.', ',')}`;
+                        }
+                    });
+                }
+                
+                // Загружаем баланс выбранного аккаунта
+                const accountType = document.getElementById('accountTypeSelect').value;
+                const balanceResponse = await fetch(`${API_BASE}/admin/balance?account_type=${accountType}&user_id=1`);
                 if (balanceResponse.ok) {
                     const balanceData = await balanceResponse.json();
                     document.getElementById('balanceInput').value = balanceData.balance;
@@ -219,9 +250,24 @@
             }
         }
         
+        // Обновление баланса при смене аккаунта
+        async function updateBalanceForAccount() {
+            const accountType = document.getElementById('accountTypeSelect').value;
+            try {
+                const balanceResponse = await fetch(`${API_BASE}/admin/balance?account_type=${accountType}&user_id=1`);
+                if (balanceResponse.ok) {
+                    const balanceData = await balanceResponse.json();
+                    document.getElementById('balanceInput').value = balanceData.balance;
+                }
+            } catch (error) {
+                console.error('Error loading balance:', error);
+            }
+        }
+        
         // Пополнение баланса
         async function topupBalance() {
             const amount = parseFloat(document.getElementById('topupAmountInput').value);
+            const accountType = document.getElementById('accountTypeSelect').value;
             
             if (isNaN(amount) || amount <= 0) {
                 showMessage('Сумма пополнения должна быть положительным числом', 'error');
@@ -238,13 +284,18 @@
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ amount: amount }),
+                    body: JSON.stringify({ amount: amount, account_type: accountType, user_id: 1 }),
                 });
                 
                 if (response.ok) {
                     const data = await response.json();
                     // Обновляем поле баланса
                     document.getElementById('balanceInput').value = data.balance;
+                    // Обновляем отображение баланса в списке
+                    const balanceEl = document.getElementById(`${accountType}Balance`);
+                    if (balanceEl) {
+                        balanceEl.textContent = `R$ ${data.balance.toFixed(2).replace('.', ',')}`;
+                    }
                     // Очищаем поле пополнения
                     document.getElementById('topupAmountInput').value = '';
                     showMessage(`Баланс успешно пополнен на ${amount}. Новый баланс: ${data.balance}`, 'success');
@@ -265,6 +316,7 @@
         async function saveSettings() {
             const balance = parseFloat(document.getElementById('balanceInput').value);
             const winRate = parseInt(document.getElementById('winRateInput').value);
+            const accountType = document.getElementById('accountTypeSelect').value;
             
             if (isNaN(balance) || balance < 0) {
                 showMessage('Баланс должен быть положительным числом', 'error');
@@ -281,19 +333,26 @@
             saveBtn.textContent = 'Сохранение...';
             
             try {
-                // Сохраняем баланс
+                // Сохраняем баланс для выбранного аккаунта
                 const balanceResponse = await fetch(`${API_BASE}/admin/balance`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ balance: balance }),
+                    body: JSON.stringify({ balance: balance, account_type: accountType, user_id: 1 }),
                 });
                 
                 if (!balanceResponse.ok) {
                     const error = await balanceResponse.json();
                     showMessage(error.error || 'Ошибка при сохранении баланса', 'error');
                     return;
+                }
+                
+                const balanceData = await balanceResponse.json();
+                // Обновляем отображение баланса в списке
+                const balanceEl = document.getElementById(`${accountType}Balance`);
+                if (balanceEl) {
+                    balanceEl.textContent = `R$ ${balanceData.balance.toFixed(2).replace('.', ',')}`;
                 }
                 
                 // Сохраняем процент выигрыша
@@ -334,6 +393,7 @@
         // Обработчики событий
         document.getElementById('saveBtn').addEventListener('click', saveSettings);
         document.getElementById('topupBtn').addEventListener('click', topupBalance);
+        document.getElementById('accountTypeSelect').addEventListener('change', updateBalanceForAccount);
         
         document.getElementById('balanceInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {

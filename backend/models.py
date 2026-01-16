@@ -71,12 +71,37 @@ def init_db():
         )
     ''')
     
+    # Создание таблицы accounts для демо и реального аккаунтов
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            account_type TEXT NOT NULL,
+            balance REAL DEFAULT 0.0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            UNIQUE(user_id, account_type)
+        )
+    ''')
+    
+    # Добавление поля account_id в таблицу rounds (если его еще нет)
+    try:
+        cursor.execute('ALTER TABLE rounds ADD COLUMN account_id INTEGER')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_rounds_account_id ON rounds(account_id)')
+    except sqlite3.OperationalError:
+        # Поле уже существует или индекс уже создан
+        pass
+    
     conn.commit()
+    
+    # Миграция данных: создание аккаунтов и перенос существующих данных
+    migrate_to_accounts(cursor, conn)
     
     # Инициализация данных
     cursor.execute('SELECT COUNT(*) FROM users')
     if cursor.fetchone()[0] == 0:
         cursor.execute('INSERT INTO users (balance) VALUES (10000.0)')
+        conn.commit()
     
     cursor.execute('SELECT COUNT(*) FROM trading_pairs')
     if cursor.fetchone()[0] == 0:
@@ -89,6 +114,12 @@ def init_db():
     if cursor.rowcount > 0:
         conn.commit()
         print('Removed AAPL pair from database')
+    
+    # Инициализация settings
+    cursor.execute('SELECT COUNT(*) FROM settings WHERE key = ?', ('win_rate',))
+    if cursor.fetchone()[0] == 0:
+        cursor.execute('INSERT INTO settings (key, value) VALUES (?, ?)', ('win_rate', '50'))
+        conn.commit()
     
     conn.close()
 
@@ -200,11 +231,80 @@ def format_pair_name(base_asset):
         'ETC': 'Ethereum Classic'
     }
     return names.get(base_asset, base_asset)
+
+def migrate_to_accounts(cursor, conn):
+    """Миграция существующих данных в систему аккаунтов"""
+    # Проверяем, есть ли уже аккаунты
+    cursor.execute('SELECT COUNT(*) FROM accounts')
+    accounts_count = cursor.fetchone()[0]
     
-    cursor.execute('SELECT COUNT(*) FROM settings WHERE key = ?', ('win_rate',))
-    if cursor.fetchone()[0] == 0:
-        cursor.execute('INSERT INTO settings (key, value) VALUES (?, ?)', ('win_rate', '50'))
+    if accounts_count == 0:
+        # Создаем аккаунты для всех существующих пользователей
+        cursor.execute('SELECT id, balance FROM users')
+        users = cursor.fetchall()
+        
+        for user_id, user_balance in users:
+            # Создаем demo аккаунт с текущим балансом пользователя
+            cursor.execute('''
+                INSERT INTO accounts (user_id, account_type, balance)
+                VALUES (?, ?, ?)
+            ''', (user_id, 'demo', user_balance if user_balance else 10000.0))
+            demo_account_id = cursor.lastrowid
+            
+            # Создаем real аккаунт с нулевым балансом
+            cursor.execute('''
+                INSERT INTO accounts (user_id, account_type, balance)
+                VALUES (?, ?, ?)
+            ''', (user_id, 'real', 0.0))
+            real_account_id = cursor.lastrowid
+            
+            # Переносим существующие раунды в demo аккаунт
+            cursor.execute('''
+                UPDATE rounds 
+                SET account_id = ? 
+                WHERE user_id = ? AND account_id IS NULL
+            ''', (demo_account_id, user_id))
+            
+            print(f'Created accounts for user {user_id}: demo (id={demo_account_id}), real (id={real_account_id})')
+        
+        conn.commit()
+
+def get_or_create_accounts(user_id=1):
+    """Получить или создать аккаунты для пользователя"""
+    conn = get_db()
+    cursor = conn.cursor()
     
-    conn.commit()
+    # Проверяем наличие аккаунтов
+    cursor.execute('SELECT id, account_type, balance FROM accounts WHERE user_id = ?', (user_id,))
+    accounts = cursor.fetchall()
+    
+    if len(accounts) == 0:
+        # Создаем аккаунты, если их нет
+        cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
+        user = cursor.fetchone()
+        user_balance = user[0] if user else 10000.0
+        
+        cursor.execute('''
+            INSERT INTO accounts (user_id, account_type, balance)
+            VALUES (?, ?, ?)
+        ''', (user_id, 'demo', user_balance))
+        demo_account_id = cursor.lastrowid
+        
+        cursor.execute('''
+            INSERT INTO accounts (user_id, account_type, balance)
+            VALUES (?, ?, ?)
+        ''', (user_id, 'real', 0.0))
+        real_account_id = cursor.lastrowid
+        
+        conn.commit()
+        conn.close()
+        
+        return [
+            {'id': demo_account_id, 'account_type': 'demo', 'balance': user_balance},
+            {'id': real_account_id, 'account_type': 'real', 'balance': 0.0}
+        ]
+    
+    result = [{'id': row[0], 'account_type': row[1], 'balance': row[2]} for row in accounts]
     conn.close()
+    return result
 

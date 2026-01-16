@@ -81,22 +81,37 @@ def sync_pairs():
 
 @api.route('/balance', methods=['GET'])
 def get_balance():
-    """Получить баланс пользователя"""
+    """Получить баланс аккаунта"""
+    account_id = request.args.get('account_id', type=int)
+    account_type = request.args.get('account_type')  # 'demo' или 'real'
     user_id = request.args.get('user_id', 1, type=int)
+    
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
+    
+    if account_id:
+        # Если передан account_id, используем его
+        cursor.execute('SELECT balance FROM accounts WHERE id = ? AND user_id = ?', (account_id, user_id))
+    elif account_type:
+        # Если передан account_type, ищем аккаунт по типу
+        cursor.execute('SELECT balance FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, account_type))
+    else:
+        # По умолчанию возвращаем demo аккаунт
+        cursor.execute('SELECT balance FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, 'demo'))
+    
     row = cursor.fetchone()
     conn.close()
     
     if row:
         return jsonify({'balance': row[0]})
-    return jsonify({'error': 'User not found'}), 404
+    return jsonify({'error': 'Account not found'}), 404
 
 @api.route('/rounds', methods=['POST'])
 def create_round():
     """Создать новый торговый раунд"""
     data = request.json
+    account_id = data.get('account_id')
+    account_type = data.get('account_type')  # 'demo' или 'real'
     user_id = data.get('user_id', 1)
     pair_id = data.get('pair_id')
     direction = data.get('direction')  # 'BUY' or 'SELL'
@@ -109,16 +124,27 @@ def create_round():
     if direction not in ['BUY', 'SELL']:
         return jsonify({'error': 'Direction must be BUY or SELL'}), 400
     
-    # Проверка баланса
+    # Получаем account_id
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
-    user = cursor.fetchone()
-    if not user:
-        conn.close()
-        return jsonify({'error': 'User not found'}), 404
     
-    if user[0] < amount:
+    if account_id:
+        cursor.execute('SELECT id, balance FROM accounts WHERE id = ? AND user_id = ?', (account_id, user_id))
+    elif account_type:
+        cursor.execute('SELECT id, balance FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, account_type))
+    else:
+        # По умолчанию используем demo аккаунт
+        cursor.execute('SELECT id, balance FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, 'demo'))
+    
+    account = cursor.fetchone()
+    if not account:
+        conn.close()
+        return jsonify({'error': 'Account not found'}), 404
+    
+    account_id = account[0]
+    account_balance = account[1]
+    
+    if account_balance < amount:
         conn.close()
         return jsonify({'error': 'Insufficient balance'}), 400
     
@@ -130,14 +156,14 @@ def create_round():
     start_price = get_current_price(pair_id)
     
     cursor.execute('''
-        INSERT INTO rounds (user_id, pair_id, direction, amount, duration, start_time, end_time, start_price)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (user_id, pair_id, direction, amount, duration, start_time, end_time, start_price))
+        INSERT INTO rounds (user_id, account_id, pair_id, direction, amount, duration, start_time, end_time, start_price)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (user_id, account_id, pair_id, direction, amount, duration, start_time, end_time, start_price))
     
     round_id = cursor.lastrowid
     
-    # Списываем сумму со счета
-    cursor.execute('UPDATE users SET balance = balance - ? WHERE id = ?', (amount, user_id))
+    # Списываем сумму со счета аккаунта
+    cursor.execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', (amount, account_id))
     
     # Получаем информацию о паре для ответа
     cursor.execute('SELECT symbol, name FROM trading_pairs WHERE id = ?', (pair_id,))
@@ -150,6 +176,7 @@ def create_round():
     
     return jsonify({
         'id': round_id,
+        'account_id': account_id,
         'pair_id': pair_id,
         'direction': direction,
         'amount': amount,
@@ -164,18 +191,45 @@ def create_round():
 
 @api.route('/rounds/active', methods=['GET'])
 def get_active_rounds():
-    """Получить активные раунды пользователя"""
+    """Получить активные раунды аккаунта"""
+    account_id = request.args.get('account_id', type=int)
+    account_type = request.args.get('account_type')
     user_id = request.args.get('user_id', 1, type=int)
+    
     conn = get_db()
     cursor = conn.cursor()
+    
+    # Определяем account_id
+    if account_id:
+        cursor.execute('SELECT id FROM accounts WHERE id = ? AND user_id = ?', (account_id, user_id))
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({'error': 'Account not found'}), 404
+        filter_account_id = account_id
+    elif account_type:
+        cursor.execute('SELECT id FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, account_type))
+        account = cursor.fetchone()
+        if not account:
+            conn.close()
+            return jsonify({'error': 'Account not found'}), 404
+        filter_account_id = account[0]
+    else:
+        # По умолчанию используем demo аккаунт
+        cursor.execute('SELECT id FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, 'demo'))
+        account = cursor.fetchone()
+        if not account:
+            conn.close()
+            return jsonify([])
+        filter_account_id = account[0]
+    
     cursor.execute('''
         SELECT r.id, r.pair_id, r.direction, r.amount, r.duration, 
                r.start_time, r.end_time, r.start_price, tp.symbol, tp.name
         FROM rounds r
         JOIN trading_pairs tp ON r.pair_id = tp.id
-        WHERE r.user_id = ? AND r.status = 'active'
+        WHERE r.account_id = ? AND r.status = 'active'
         ORDER BY r.start_time DESC
-    ''', (user_id,))
+    ''', (filter_account_id,))
     
     rounds = []
     for row in cursor.fetchall():
@@ -219,7 +273,9 @@ def get_active_rounds():
 
 @api.route('/rounds/history', methods=['GET'])
 def get_rounds_history():
-    """Получить историю завершенных раундов пользователя"""
+    """Получить историю завершенных раундов аккаунта"""
+    account_id = request.args.get('account_id', type=int)
+    account_type = request.args.get('account_type')
     user_id = request.args.get('user_id', 1, type=int)
     page = request.args.get('page', 1, type=int)
     limit = request.args.get('limit', 20, type=int)
@@ -227,6 +283,29 @@ def get_rounds_history():
     
     conn = get_db()
     cursor = conn.cursor()
+    
+    # Определяем account_id
+    if account_id:
+        cursor.execute('SELECT id FROM accounts WHERE id = ? AND user_id = ?', (account_id, user_id))
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({'error': 'Account not found'}), 404
+        filter_account_id = account_id
+    elif account_type:
+        cursor.execute('SELECT id FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, account_type))
+        account = cursor.fetchone()
+        if not account:
+            conn.close()
+            return jsonify({'transactions': [], 'page': page, 'total_pages': 0})
+        filter_account_id = account[0]
+    else:
+        # По умолчанию используем demo аккаунт
+        cursor.execute('SELECT id FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, 'demo'))
+        account = cursor.fetchone()
+        if not account:
+            conn.close()
+            return jsonify({'transactions': [], 'page': page, 'total_pages': 0})
+        filter_account_id = account[0]
     
     # Получаем завершенные раунды с результатами
     cursor.execute('''
@@ -237,10 +316,10 @@ def get_rounds_history():
         FROM rounds r
         JOIN trading_pairs tp ON r.pair_id = tp.id
         LEFT JOIN round_results rr ON r.id = rr.round_id
-        WHERE r.user_id = ? AND r.status = 'finished'
+        WHERE r.account_id = ? AND r.status = 'finished'
         ORDER BY r.end_time DESC
         LIMIT ? OFFSET ?
-    ''', (user_id, limit, offset))
+    ''', (filter_account_id, limit, offset))
     
     transactions = []
     for row in cursor.fetchall():
@@ -302,8 +381,8 @@ def get_rounds_history():
     cursor.execute('''
         SELECT COUNT(*) 
         FROM rounds r
-        WHERE r.user_id = ? AND r.status = 'finished'
-    ''', (user_id,))
+        WHERE r.account_id = ? AND r.status = 'finished'
+    ''', (filter_account_id,))
     total_count = cursor.fetchone()[0]
     
     conn.close()
@@ -347,7 +426,7 @@ def finish_round(round_id):
     
     # Получаем данные раунда
     cursor.execute('''
-        SELECT user_id, pair_id, amount, start_price
+        SELECT user_id, account_id, pair_id, amount, start_price
         FROM rounds
         WHERE id = ? AND status = 'active'
     ''', (round_id,))
@@ -363,7 +442,19 @@ def finish_round(round_id):
         conn.close()
         return jsonify({'error': 'Round not found or already finished'}), 404
     
-    user_id, pair_id, amount, start_price = round_data
+    user_id, account_id, pair_id, amount, start_price = round_data
+    
+    # Если account_id отсутствует (старые раунды), используем demo аккаунт
+    if account_id is None:
+        cursor.execute('SELECT id FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, 'demo'))
+        demo_account = cursor.fetchone()
+        if demo_account:
+            account_id = demo_account[0]
+            # Обновляем раунд с account_id
+            cursor.execute('UPDATE rounds SET account_id = ? WHERE id = ?', (account_id, round_id))
+        else:
+            conn.close()
+            return jsonify({'error': 'Account not found'}), 404
     
     # #region agent log
     try:
@@ -376,12 +467,12 @@ def finish_round(round_id):
     from utils import get_current_price
     end_price = get_current_price(pair_id)
     
-    # Обновляем баланс пользователя
+    # Обновляем баланс аккаунта
     if win:
         # Выигрыш: возвращаем ставку + прибыль
         new_balance_change = amount + profit
-        cursor.execute('UPDATE users SET balance = balance + ? WHERE id = ?', 
-                     (new_balance_change, user_id))
+        cursor.execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', 
+                     (new_balance_change, account_id))
     # Если проигрыш, баланс не меняется (ставка уже была списана при создании)
     
     # Сохраняем результат
@@ -394,8 +485,8 @@ def finish_round(round_id):
     cursor.execute('UPDATE rounds SET status = ? WHERE id = ?', 
                   ('finished', round_id))
     
-    # Получаем новый баланс
-    cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
+    # Получаем новый баланс аккаунта
+    cursor.execute('SELECT balance FROM accounts WHERE id = ?', (account_id,))
     new_balance = cursor.fetchone()[0]
     
     # #region agent log
@@ -548,25 +639,149 @@ def set_win_rate():
     
     return jsonify({'win_rate': win_rate})
 
-@api.route('/admin/balance', methods=['GET'])
-def get_admin_balance():
-    """Получить баланс пользователя для админки"""
+@api.route('/accounts', methods=['GET'])
+def get_accounts():
+    """Получить список аккаунтов пользователя (demo и real)"""
     user_id = request.args.get('user_id', 1, type=int)
+    from models import get_or_create_accounts
+    accounts = get_or_create_accounts(user_id)
+    return jsonify(accounts)
+
+@api.route('/accounts/current', methods=['GET'])
+def get_current_account():
+    """Получить текущий активный аккаунт (из сессии или по умолчанию demo)"""
+    user_id = request.args.get('user_id', 1, type=int)
+    account_id = request.args.get('account_id', type=int)
+    
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
+    
+    if account_id:
+        # Если передан account_id, возвращаем его
+        cursor.execute('''
+            SELECT id, user_id, account_type, balance 
+            FROM accounts 
+            WHERE id = ? AND user_id = ?
+        ''', (account_id, user_id))
+    else:
+        # Иначе возвращаем demo аккаунт по умолчанию
+        cursor.execute('''
+            SELECT id, user_id, account_type, balance 
+            FROM accounts 
+            WHERE user_id = ? AND account_type = 'demo'
+            LIMIT 1
+        ''', (user_id,))
+    
     row = cursor.fetchone()
     conn.close()
     
     if row:
-        return jsonify({'balance': row[0]})
-    return jsonify({'error': 'User not found'}), 404
+        return jsonify({
+            'id': row[0],
+            'user_id': row[1],
+            'account_type': row[2],
+            'balance': row[3]
+        })
+    
+    # Если аккаунт не найден, создаем его
+    from models import get_or_create_accounts
+    accounts = get_or_create_accounts(user_id)
+    demo_account = next((a for a in accounts if a['account_type'] == 'demo'), accounts[0])
+    return jsonify(demo_account)
+
+@api.route('/accounts/switch', methods=['POST'])
+def switch_account():
+    """Переключиться на другой аккаунт (для сессии, но в основном для фронтенда)"""
+    data = request.json
+    account_id = data.get('account_id')
+    account_type = data.get('account_type')  # 'demo' или 'real'
+    user_id = data.get('user_id', 1)
+    
+    if not account_id and not account_type:
+        return jsonify({'error': 'account_id or account_type is required'}), 400
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    if account_id:
+        cursor.execute('''
+            SELECT id, user_id, account_type, balance 
+            FROM accounts 
+            WHERE id = ? AND user_id = ?
+        ''', (account_id, user_id))
+    else:
+        cursor.execute('''
+            SELECT id, user_id, account_type, balance 
+            FROM accounts 
+            WHERE user_id = ? AND account_type = ?
+            LIMIT 1
+        ''', (user_id, account_type))
+    
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return jsonify({
+            'id': row[0],
+            'user_id': row[1],
+            'account_type': row[2],
+            'balance': row[3]
+        })
+    
+    return jsonify({'error': 'Account not found'}), 404
+
+@api.route('/admin/balance', methods=['GET'])
+def get_admin_balance():
+    """Получить баланс аккаунта для админки"""
+    account_id = request.args.get('account_id', type=int)
+    account_type = request.args.get('account_type')  # 'demo' или 'real'
+    user_id = request.args.get('user_id', 1, type=int)
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    if account_id:
+        cursor.execute('SELECT id, account_type, balance FROM accounts WHERE id = ? AND user_id = ?', (account_id, user_id))
+    elif account_type:
+        cursor.execute('SELECT id, account_type, balance FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, account_type))
+    else:
+        # По умолчанию возвращаем demo аккаунт
+        cursor.execute('SELECT id, account_type, balance FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, 'demo'))
+    
+    row = cursor.fetchone()
+    conn.close()
+    
+    if row:
+        return jsonify({
+            'account_id': row[0],
+            'account_type': row[1],
+            'balance': row[2]
+        })
+    return jsonify({'error': 'Account not found'}), 404
+
+@api.route('/admin/accounts', methods=['GET'])
+def get_admin_accounts():
+    """Получить список всех аккаунтов с балансами для админки"""
+    user_id = request.args.get('user_id', 1, type=int)
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, account_type, balance FROM accounts WHERE user_id = ? ORDER BY account_type', (user_id,))
+    accounts = [{'id': row[0], 'account_type': row[1], 'balance': row[2]} for row in cursor.fetchall()]
+    conn.close()
+    return jsonify(accounts)
 
 @api.route('/admin/balance', methods=['POST'])
 def set_admin_balance():
-    """Установить баланс пользователя"""
+    """Установить баланс аккаунта"""
     data = request.json
     balance = data.get('balance')
+    account_id = data.get('account_id')
+    if account_id is not None:
+        try:
+            account_id = int(account_id)
+        except (ValueError, TypeError):
+            account_id = None
+    account_type = data.get('account_type')  # 'demo' или 'real'
     user_id = data.get('user_id', 1)
     
     if balance is None:
@@ -582,28 +797,51 @@ def set_admin_balance():
     conn = get_db()
     cursor = conn.cursor()
     
-    # Проверяем существование пользователя
-    cursor.execute('SELECT id FROM users WHERE id = ?', (user_id,))
-    if not cursor.fetchone():
+    # Определяем account_id
+    if account_id:
+        cursor.execute('SELECT id FROM accounts WHERE id = ? AND user_id = ?', (account_id, user_id))
+        if not cursor.fetchone():
+            conn.close()
+            return jsonify({'error': 'Account not found'}), 404
+        target_account_id = account_id
+    elif account_type:
+        cursor.execute('SELECT id FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, account_type))
+        account = cursor.fetchone()
+        if not account:
+            conn.close()
+            return jsonify({'error': 'Account not found'}), 404
+        target_account_id = account[0]
+    else:
         conn.close()
-        return jsonify({'error': 'User not found'}), 404
+        return jsonify({'error': 'account_id or account_type is required'}), 400
     
-    # Обновляем баланс
-    cursor.execute('UPDATE users SET balance = ? WHERE id = ?', (balance, user_id))
+    # Обновляем баланс аккаунта
+    cursor.execute('UPDATE accounts SET balance = ? WHERE id = ?', (balance, target_account_id))
     conn.commit()
     
     # Получаем обновленный баланс
-    cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
-    updated_balance = cursor.fetchone()[0]
+    cursor.execute('SELECT id, account_type, balance FROM accounts WHERE id = ?', (target_account_id,))
+    updated = cursor.fetchone()
     conn.close()
     
-    return jsonify({'balance': updated_balance})
+    return jsonify({
+        'account_id': updated[0],
+        'account_type': updated[1],
+        'balance': updated[2]
+    })
 
 @api.route('/admin/balance/topup', methods=['POST'])
 def topup_balance():
-    """Пополнить баланс пользователя (добавить сумму к текущему балансу)"""
+    """Пополнить баланс аккаунта (добавить сумму к текущему балансу)"""
     data = request.json
     amount = data.get('amount')
+    account_id = data.get('account_id')
+    if account_id is not None:
+        try:
+            account_id = int(account_id)
+        except (ValueError, TypeError):
+            account_id = None
+    account_type = data.get('account_type')  # 'demo' или 'real'
     user_id = data.get('user_id', 1)
     
     if amount is None:
@@ -619,27 +857,42 @@ def topup_balance():
     conn = get_db()
     cursor = conn.cursor()
     
-    # Проверяем существование пользователя и получаем текущий баланс
-    cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
-    user = cursor.fetchone()
-    if not user:
+    # Определяем account_id
+    if account_id:
+        cursor.execute('SELECT id, balance FROM accounts WHERE id = ? AND user_id = ?', (account_id, user_id))
+        account = cursor.fetchone()
+        if not account:
+            conn.close()
+            return jsonify({'error': 'Account not found'}), 404
+        target_account_id = account_id
+        current_balance = account[1]
+    elif account_type:
+        cursor.execute('SELECT id, balance FROM accounts WHERE user_id = ? AND account_type = ?', (user_id, account_type))
+        account = cursor.fetchone()
+        if not account:
+            conn.close()
+            return jsonify({'error': 'Account not found'}), 404
+        target_account_id = account[0]
+        current_balance = account[1]
+    else:
         conn.close()
-        return jsonify({'error': 'User not found'}), 404
+        return jsonify({'error': 'account_id or account_type is required'}), 400
     
-    current_balance = user[0]
     new_balance = current_balance + amount
     
-    # Обновляем баланс
-    cursor.execute('UPDATE users SET balance = ? WHERE id = ?', (new_balance, user_id))
+    # Обновляем баланс аккаунта
+    cursor.execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', (amount, target_account_id))
     conn.commit()
     
     # Получаем обновленный баланс для подтверждения
-    cursor.execute('SELECT balance FROM users WHERE id = ?', (user_id,))
-    updated_balance = cursor.fetchone()[0]
+    cursor.execute('SELECT id, account_type, balance FROM accounts WHERE id = ?', (target_account_id,))
+    updated = cursor.fetchone()
     conn.close()
     
     return jsonify({
-        'balance': updated_balance,
+        'account_id': updated[0],
+        'account_type': updated[1],
+        'balance': updated[2],
         'added': amount,
         'previous_balance': current_balance
     })

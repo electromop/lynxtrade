@@ -14,6 +14,8 @@ let activeRounds = [];
 let roundTimers = new Map(); // roundId -> intervalId для хранения таймеров
 let userBalance = 10000.0;
 let tradeAmount = 5.0;
+let currentAccountId = null; // Текущий активный аккаунт
+let accounts = []; // Список всех аккаунтов пользователя
 
 // Функции для сохранения/загрузки выбранных пар в localStorage
 function saveSelectedPairs() {
@@ -65,9 +67,11 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('✅ LightweightCharts loaded, initializing...');
             initSocket();
             loadPairs();
-            loadBalance();
-            setupEventListeners();
-            updateProfitDisplay();
+            loadAccounts().then(() => {
+                loadBalance();
+                setupEventListeners();
+                updateProfitDisplay();
+            });
             
             // Загружаем активные раунды после небольшой задержки, чтобы график успел инициализироваться
             setTimeout(() => {
@@ -281,13 +285,201 @@ function updateMobileV2Balance() {
     }
 }
 
+// Функции для работы с аккаунтами
+async function loadAccounts() {
+    try {
+        if (!window.API_BASE) {
+            window.API_BASE = window.location.origin + '/api';
+        }
+        const response = await fetch(`${window.API_BASE}/accounts?user_id=1`);
+        if (response.ok) {
+            accounts = await response.json();
+            console.log('📋 Loaded accounts:', accounts);
+            
+            // Загружаем текущий аккаунт из localStorage или используем demo по умолчанию
+            const savedAccountId = localStorage.getItem('lynxtrade_currentAccountId');
+            if (savedAccountId) {
+                const accountId = parseInt(savedAccountId);
+                const account = accounts.find(a => a.id === accountId);
+                if (account) {
+                    currentAccountId = accountId;
+                } else {
+                    // Если сохраненный аккаунт не найден, используем demo
+                    const demoAccount = accounts.find(a => a.account_type === 'demo');
+                    currentAccountId = demoAccount ? demoAccount.id : accounts[0].id;
+                }
+            } else {
+                // По умолчанию используем demo аккаунт
+                const demoAccount = accounts.find(a => a.account_type === 'demo');
+                currentAccountId = demoAccount ? demoAccount.id : accounts[0].id;
+            }
+            
+            // Сохраняем текущий аккаунт
+            localStorage.setItem('lynxtrade_currentAccountId', currentAccountId.toString());
+            updateAccountDisplay();
+            
+            // Обновляем мобильную версию после загрузки аккаунтов
+            createMobileV2Header();
+        }
+    } catch (error) {
+        console.error('Error loading accounts:', error);
+        // Fallback: создаем демо аккаунт
+        currentAccountId = null;
+    }
+}
+
+async function switchAccount(accountId) {
+    try {
+        if (!window.API_BASE) {
+            window.API_BASE = window.location.origin + '/api';
+        }
+        const response = await fetch(`${window.API_BASE}/accounts/switch`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ account_id: accountId, user_id: 1 }),
+        });
+        
+        if (response.ok) {
+            const account = await response.json();
+            currentAccountId = account.id;
+            localStorage.setItem('lynxtrade_currentAccountId', currentAccountId.toString());
+            
+            // Очищаем активные раунды и таймеры перед переключением
+            activeRounds.forEach(round => {
+                if (window.chartModule && window.chartModule.removeOrderLine) {
+                    window.chartModule.removeOrderLine(round.pair_id, round.id.toString());
+                }
+            });
+            roundTimers.forEach((intervalId) => {
+                clearInterval(intervalId);
+            });
+            roundTimers.clear();
+            activeRounds = [];
+            
+            // Обновляем отображение
+            updateAccountDisplay();
+            loadBalance();
+            loadActiveRounds();
+            
+            // Обновляем мобильную версию после переключения аккаунта
+            createMobileV2Header();
+            
+            // Закрываем модальное окно
+            const modal = document.getElementById('accountSwitchModal');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+            }
+            
+            console.log('✅ Switched to account:', account);
+        }
+    } catch (error) {
+        console.error('Error switching account:', error);
+    }
+}
+
+function showAccountSwitchModal() {
+    const modal = document.getElementById('accountSwitchModal');
+    const accountsList = document.getElementById('accountsList');
+    
+    if (!modal || !accountsList) return;
+    
+    // Очищаем список
+    accountsList.innerHTML = '';
+    
+    // Сортируем аккаунты: сначала real, потом demo
+    const sortedAccounts = [...accounts].sort((a, b) => {
+        if (a.account_type === 'real' && b.account_type === 'demo') return -1;
+        if (a.account_type === 'demo' && b.account_type === 'real') return 1;
+        return 0;
+    });
+    
+    // Добавляем аккаунты
+    sortedAccounts.forEach(account => {
+        const isActive = account.id === currentAccountId;
+        const accountDiv = document.createElement('div');
+        accountDiv.className = `lm-item ${isActive ? 'active' : ''}`;
+        accountDiv.onclick = () => switchAccount(account.id);
+        
+        const accountName = account.account_type === 'demo' ? 'Conta Demo' : 'Conta Principal';
+        const accountTypeText = account.account_type === 'demo' ? 'Conta Demo' : 'Conta Real';
+        const typeClass = account.account_type === 'demo' ? 'text-orange' : 'text-buy';
+        const balance = account.balance.toFixed(2).replace('.', ',');
+        
+        accountDiv.innerHTML = `
+            <div class="lmi-name">
+                ${accountName}
+            </div>
+            <div class="lmi-type d-none d-sm-none d-md-block ${typeClass}">${accountTypeText}</div>
+            <div class="lmi-amount">R$ ${balance}</div>
+            <div class="lmi-actions">
+                <button data-bs-toggle="tooltip" data-bs-custom-class="tooltip-inverse" data-bs-placement="top" title="Depositar">
+                    <span class="material-symbols-outlined zli" translate="no">attach_money</span>
+                </button>
+            </div>
+        `;
+        
+        accountsList.appendChild(accountDiv);
+    });
+    
+    modal.style.display = 'block';
+    modal.classList.add('show');
+}
+
+function updateAccountDisplay() {
+    // Обновляем десктопную версию
+    const accountName = document.getElementById('account_name');
+    if (accountName && currentAccountId) {
+        const account = accounts.find(a => a.id === currentAccountId);
+        if (account) {
+            const accountType = account.account_type === 'demo' ? 'Demo Account' : 'Real Account';
+            accountName.textContent = accountType;
+        }
+    }
+    
+    // Обновляем мобильную версию (mobile-v2)
+    const mobileAccountName = document.getElementById('mobile-account-name');
+    const mobileV2 = document.getElementById('mobile-v2');
+    if (mobileAccountName && currentAccountId) {
+        const account = accounts.find(a => a.id === currentAccountId);
+        if (account) {
+            const accountType = account.account_type === 'demo' ? 'Demo Account' : 'Real Account';
+            mobileAccountName.textContent = accountType;
+            
+            // Обновляем класс цвета для баланса
+            if (mobileV2) {
+                const balanceContainer = mobileV2.querySelector('.accounts b');
+                const countupWrap = mobileV2.querySelector('.accounts .countup-wrap');
+                if (balanceContainer && countupWrap) {
+                    // Удаляем старые классы
+                    balanceContainer.classList.remove('text-orange', 'text-buy');
+                    countupWrap.classList.remove('text-orange', 'text-buy');
+                    // Добавляем новый класс
+                    const typeClass = account.account_type === 'real' ? 'text-buy' : 'text-orange';
+                    balanceContainer.classList.add(typeClass);
+                    countupWrap.classList.add(typeClass);
+                }
+            }
+        }
+    }
+}
+
 async function loadBalance() {
     try {
         // Убеждаемся, что API_BASE установлен
         if (!window.API_BASE) {
             window.API_BASE = window.location.origin + '/api';
         }
-        const response = await fetch(`${window.API_BASE}/balance?user_id=1`);
+        
+        // Используем account_id если он установлен
+        let url = `${window.API_BASE}/balance?user_id=1`;
+        if (currentAccountId) {
+            url += `&account_id=${currentAccountId}`;
+        }
+        
+        const response = await fetch(url);
         const data = await response.json();
         userBalance = data.balance;
         updateBalanceDisplay();
@@ -303,7 +495,10 @@ async function loadActiveRounds() {
         if (!window.API_BASE) {
             window.API_BASE = window.location.origin + '/api';
         }
-        const url = `${window.API_BASE}/rounds/active?user_id=1`;
+        let url = `${window.API_BASE}/rounds/active?user_id=1`;
+        if (currentAccountId) {
+            url += `&account_id=${currentAccountId}`;
+        }
         console.log('📋 Fetching active rounds from:', url);
         const response = await fetch(url);
         const rounds = await response.json();
@@ -431,7 +626,10 @@ setInterval(async () => {
         if (!window.API_BASE) {
             window.API_BASE = window.location.origin + '/api';
         }
-        const url = `${window.API_BASE}/rounds/active?user_id=1`;
+        let url = `${window.API_BASE}/rounds/active?user_id=1`;
+        if (currentAccountId) {
+            url += `&account_id=${currentAccountId}`;
+        }
         const response = await fetch(url);
         const rounds = await response.json();
         
@@ -492,18 +690,21 @@ setInterval(async () => {
                 // #region agent log
                 const timerExists = roundTimers.has(round.id);
                 const roundTimersKeys = Array.from(roundTimers.keys());
-                fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:429',message:'periodic update checking timer',data:{roundId:round.id,roundIdType:typeof round.id,now:now,endTime:endTime,timeDiff:now-endTime,timerExists:timerExists,roundTimersKeys:roundTimersKeys,roundTimersSize:roundTimers.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
+                // Debug logging disabled
+                // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:429',message:'periodic update checking timer',data:{roundId:round.id,roundIdType:typeof round.id,now:now,endTime:endTime,timeDiff:now-endTime,timerExists:timerExists,roundTimersKeys:roundTimersKeys,roundTimersSize:roundTimers.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
                 // #endregion
                 if (timerExists) {
                     // Таймер активен, пусть startRoundTimer завершит раунд
                     // #region agent log
-                    fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:437',message:'periodic update round expired but timer active',data:{roundId:round.id,now:now,endTime:endTime,timeDiff:now-endTime,timerExists:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
+                    // Debug logging disabled
+                    // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:437',message:'periodic update round expired but timer active',data:{roundId:round.id,now:now,endTime:endTime,timeDiff:now-endTime,timerExists:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
                     // #endregion
                     return; // Не завершаем здесь, пусть startRoundTimer завершит
                 }
                 console.log(`⏰ [periodic update] Round ${round.id} expired, finishing on client (no active timer)`);
                 // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:442',message:'periodic update round expired',data:{roundId:round.id,now:now,endTime:endTime,timeDiff:now-endTime,timerExists:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
+                // Debug logging disabled
+                // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:442',message:'periodic update round expired',data:{roundId:round.id,now:now,endTime:endTime,timeDiff:now-endTime,timerExists:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'B'})}).catch(()=>{});
                 // #endregion
                 finishRoundOnClient(round);
             }
@@ -616,6 +817,46 @@ function setupEventListeners() {
         });
     }
     
+    // Обработчик переключения аккаунтов
+    const accountSwitchBtn = document.getElementById('account_switch_btn');
+    const accountDetails = document.getElementById('account_details');
+    if (accountSwitchBtn) {
+        accountSwitchBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showAccountSwitchModal();
+        });
+    }
+    if (accountDetails) {
+        accountDetails.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showAccountSwitchModal();
+        });
+    }
+    
+    // Закрытие модального окна переключения аккаунтов
+    const closeAccountModal = document.getElementById('closeAccountModal');
+    if (closeAccountModal) {
+        closeAccountModal.addEventListener('click', () => {
+            const modal = document.getElementById('accountSwitchModal');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+            }
+        });
+    }
+    
+    // Обновление списка аккаунтов
+    const refreshAccountModal = document.getElementById('refreshAccountModal');
+    if (refreshAccountModal) {
+        refreshAccountModal.addEventListener('click', () => {
+            loadAccounts().then(() => {
+                showAccountSwitchModal();
+            });
+        });
+    }
+    
     // Закрытие модального окна Layout при клике вне его
     window.addEventListener('click', (e) => {
         const layoutModal = document.getElementById('layoutModal');
@@ -629,6 +870,11 @@ function setupEventListeners() {
         const rankingModal = document.getElementById('rankingModal');
         if (rankingModal && e.target === rankingModal) {
             closeRankingModalFunc();
+        }
+        const accountSwitchModal = document.getElementById('accountSwitchModal');
+        if (accountSwitchModal && e.target === accountSwitchModal) {
+            accountSwitchModal.style.display = 'none';
+            accountSwitchModal.classList.remove('show');
         }
     });
     
@@ -771,6 +1017,11 @@ function createMobileV2Header() {
         }
     }
     
+    // Получаем текущий аккаунт
+    const currentAccount = accounts.find(a => a.id === currentAccountId);
+    const accountType = currentAccount ? (currentAccount.account_type === 'demo' ? 'Demo Account' : 'Real Account') : 'Demo Account';
+    const typeClass = currentAccount && currentAccount.account_type === 'real' ? 'text-buy' : 'text-orange';
+    
     // Получаем баланс
     const balance = userBalance || 10000.0;
     const formattedBalance = balance.toFixed(2).replace('.', ',');
@@ -779,10 +1030,10 @@ function createMobileV2Header() {
         <div data-v-f02899e6="" class="user-img">
             <img data-v-f02899e6="" src="https://staketech.s3.us-east-1.amazonaws.com/cdn/avatars/0.jpg" alt="User">
         </div>
-        <div data-v-f02899e6="" class="accounts">
-            <div data-v-f02899e6="">Demo Account</div>
-            <b data-v-f02899e6="" class="text-orange">
-                <div data-v-f02899e6="" class="countup-wrap text-orange">
+        <div data-v-f02899e6="" class="accounts" style="cursor: pointer;">
+            <div data-v-f02899e6="" id="mobile-account-name">${accountType}</div>
+            <b data-v-f02899e6="" class="${typeClass}">
+                <div data-v-f02899e6="" class="countup-wrap ${typeClass}">
                     <span id="mobile-balance">R$ ${formattedBalance}</span>
                 </div>
             </b>
@@ -795,19 +1046,17 @@ function createMobileV2Header() {
         </div>
     `;
     
-    // Добавляем обработчик клика на accounts для открытия меню выбора пар
-    // Удаляем старые обработчики, если они есть
+    // Добавляем обработчик клика на accounts для открытия модального окна переключения аккаунтов
     const accountsEl = mobileV2.querySelector('.accounts');
     if (accountsEl) {
-        accountsEl.style.cursor = 'pointer';
-        // Клонируем элемент, чтобы удалить все старые обработчики
+        // Удаляем старые обработчики, если они есть
         const newAccountsEl = accountsEl.cloneNode(true);
         accountsEl.parentNode.replaceChild(newAccountsEl, accountsEl);
         // Добавляем новый обработчик
         newAccountsEl.addEventListener('click', (e) => {
             e.stopPropagation();
             e.preventDefault();
-            openMobileTabs();
+            showAccountSwitchModal();
         });
     }
 }
@@ -1278,7 +1527,7 @@ function setupRightbarHandlers(windowElement, pairId) {
     });
 }
 
-function initChartForWindow(pairId, windowElement) {
+function initChartForWindow(pairId, windowElement, forceInit = false) {
     const chartId = windowElement.getAttribute('data-chart-id');
     const chartContainer = windowElement.querySelector(`#${chartId}`);
     
@@ -1287,8 +1536,8 @@ function initChartForWindow(pairId, windowElement) {
         return;
     }
     
-    // Инициализируем график для этого окна только если оно активно
-    if (pairId === activePairId) {
+    // Инициализируем график для этого окна если оно активно или если принудительно
+    if (forceInit || pairId === activePairId) {
         window.chartModule.initChart(pairId, chartContainer);
     }
 }
@@ -1737,6 +1986,29 @@ function selectLayout(layoutName, closeModal = true) {
             if (rightbar) {
                 rightbar.style.display = '';
             }
+            
+            // Инициализируем графики для всех видимых окон
+            const pairId = parseInt(win.getAttribute('id').replace('window_', ''));
+            if (pairId && pairWindows.has(pairId)) {
+                const windowData = pairWindows.get(pairId);
+                // Инициализируем график с задержкой, чтобы layout успел примениться и контейнер получил размеры
+                setTimeout(() => {
+                    const chartId = windowData.windowElement.getAttribute('data-chart-id');
+                    const chartContainer = windowData.windowElement.querySelector(`#${chartId}`);
+                    // Проверяем, что контейнер видим и имеет размеры
+                    if (chartContainer && window.getComputedStyle(chartContainer).display !== 'none') {
+                        const rect = chartContainer.getBoundingClientRect();
+                        if (rect.width > 0 && rect.height > 0) {
+                            initChartForWindow(pairId, windowData.windowElement, true);
+                        } else {
+                            // Если контейнер еще не имеет размеров, ждем еще немного
+                            setTimeout(() => {
+                                initChartForWindow(pairId, windowData.windowElement, true);
+                            }, 200);
+                        }
+                    }
+                }, 150 * (index + 1)); // Задержка для каждого окна, чтобы layout успел примениться
+            }
         });
         
         // Применяем специфичные стили для layout_3 и layout_3_alt
@@ -1834,7 +2106,10 @@ async function loadHistory(page = 1) {
         }
         
         // Пытаемся получить историю с сервера
-        const url = `${window.API_BASE}/rounds/history?user_id=1&page=${page}`;
+        let url = `${window.API_BASE}/rounds/history?user_id=1&page=${page}`;
+        if (currentAccountId) {
+            url += `&account_id=${currentAccountId}`;
+        }
         console.log('📜 Fetching history from:', url);
         
         try {
@@ -2279,12 +2554,14 @@ function updateProfitDisplay(pairId = null) {
 
 function updateBalanceDisplay() {
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1163',message:'updateBalanceDisplay entry',data:{userBalance:userBalance},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // Debug logging disabled
+    // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1163',message:'updateBalanceDisplay entry',data:{userBalance:userBalance},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
     // #endregion
     const balanceEl = document.getElementById('balance');
     if (!balanceEl) {
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1166',message:'balance element not found',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // Debug logging disabled
+        // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1166',message:'balance element not found',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
         // #endregion
         return;
     }
@@ -2292,7 +2569,8 @@ function updateBalanceDisplay() {
     balanceEl.textContent = `R$ ${formatted}`;
     updateMobileV2Balance();
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1171',message:'updateBalanceDisplay exit',data:{userBalance:userBalance,formatted:formatted,textContent:balanceEl.textContent},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // Debug logging disabled
+    // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1171',message:'updateBalanceDisplay exit',data:{userBalance:userBalance,formatted:formatted,textContent:balanceEl.textContent},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
     // #endregion
 }
 
@@ -2309,40 +2587,19 @@ function updateServerTime(timeStr) {
     const minutes = date.getUTCMinutes();
     const seconds = date.getUTCSeconds();
     
-    // ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ ДЛЯ ОТЛАДКИ
-    if (!window.serverTimeDebugCount) window.serverTimeDebugCount = 0;
-    if (window.serverTimeDebugCount < 5) {
-        console.log(`🕐 [updateServerTime] DEBUG: serverTimeUTC=${serverTimeUTC}, date=${date.toISOString()}, UTC hours=${hours}, minutes=${minutes}, seconds=${seconds}`);
-        window.serverTimeDebugCount++;
-    }
-    
     // Вычитаем 3 часа для UTC-3
-    const originalHours = hours;
     hours = hours - 3;
     if (hours < 0) {
         hours = hours + 24; // Если отрицательное, переходим на предыдущий день
     }
     
-    if (window.serverTimeDebugCount <= 5) {
-        console.log(`🕐 [updateServerTime] DEBUG: originalHours=${originalHours}, after -3: ${hours}, final time will be: ${hours}:${minutes}:${seconds}`);
-    }
-    
     const displayTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    
-    // Логируем displayTime для отладки
-    if (window.serverTimeDebugCount <= 5) {
-        console.log(`🕐 [updateServerTime] displayTime=${displayTime}, will be set to element`);
-    }
     
     // Обновляем время во всех окнах
     pairWindows.forEach((data, pairId) => {
         const serverTimeEl = document.getElementById(`server-clock-${pairId}`);
         if (serverTimeEl) {
             serverTimeEl.textContent = displayTime;
-            // Логируем, что именно записано в элемент
-            if (window.serverTimeDebugCount <= 5) {
-                console.log(`🕐 [updateServerTime] Set server-clock-${pairId} to: ${serverTimeEl.textContent}`);
-            }
         }
     });
 }
@@ -2356,7 +2613,7 @@ function startServerTimePolling() {
                 window.API_BASE = window.location.origin + '/api';
             }
             const url = `${window.API_BASE}/server-time`;
-            console.log('🕐 Fetching server time from:', url);
+            // console.log('🕐 Fetching server time from:', url);
             const response = await fetch(url);
             if (response.ok) {
                 const data = await response.json();
@@ -2471,7 +2728,8 @@ function startGlobalTimeRemainingTimer() {
             
             const timeElement = document.getElementById(`round-start-time-${pair.id}`);
             // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1394',message:'global timer updating time',data:{pairId:pair.id,remaining:remaining,serverTimeSec:serverTimeSec,secondsInCurrentMinute:serverTimeSec%60,timeElementExists:!!timeElement},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+            // Debug logging disabled
+    // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1394',message:'global timer updating time',data:{pairId:pair.id,remaining:remaining,serverTimeSec:serverTimeSec,secondsInCurrentMinute:serverTimeSec%60,timeElementExists:!!timeElement},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
             // #endregion
             if (timeElement) {
                 const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
@@ -2602,6 +2860,11 @@ async function createRound(direction, pairId = null) {
         amount: tradeAmount,
         duration: tradeDuration,
     };
+    
+    // Добавляем account_id если он установлен
+    if (currentAccountId) {
+        requestData.account_id = currentAccountId;
+    }
     
     // Убеждаемся, что API_BASE установлен
     if (!window.API_BASE) {
@@ -2784,7 +3047,8 @@ function updateRoundTimeRemaining(roundId, seconds, pairId = null, duration = nu
     const timeStr = `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1900',message:'updateRoundTimeRemaining entry',data:{roundId:roundId,seconds:seconds,pairId:pairId,duration:duration,timeStr:timeStr},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+    // Debug logging disabled
+    // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1900',message:'updateRoundTimeRemaining entry',data:{roundId:roundId,seconds:seconds,pairId:pairId,duration:duration,timeStr:timeStr},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
     // #endregion
     
     // Обновляем элемент в списке активных раундов
@@ -2861,18 +3125,21 @@ async function finishRoundOnClient(round) {
     console.log(`🏁 [finishRoundOnClient] Finishing round ${round.id} on client`);
     
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1638',message:'finishRoundOnClient entry',data:{roundId:round.id,pairId:round.pair_id,amount:round.amount,apiBase:window.API_BASE},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // Debug logging disabled
+    // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1638',message:'finishRoundOnClient entry',data:{roundId:round.id,pairId:round.pair_id,amount:round.amount,apiBase:window.API_BASE},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
     // #endregion
     
     try {
         // 1. Запрашиваем win_rate с сервера
         const winRateUrl = `${window.API_BASE}/win-rate`;
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1643',message:'fetching win_rate',data:{url:winRateUrl,roundId:round.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // Debug logging disabled
+        // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1643',message:'fetching win_rate',data:{url:winRateUrl,roundId:round.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
         // #endregion
         const winRateResponse = await fetch(winRateUrl);
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1644',message:'win_rate response',data:{roundId:round.id,ok:winRateResponse.ok,status:winRateResponse.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // Debug logging disabled
+        // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1644',message:'win_rate response',data:{roundId:round.id,ok:winRateResponse.ok,status:winRateResponse.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
         // #endregion
         const winRateData = await winRateResponse.json();
         const winRate = winRateData.win_rate || 50;
@@ -2882,7 +3149,8 @@ async function finishRoundOnClient(round) {
         const isWin = determineRoundResult(winRate);
         const amount = round.amount || 0;
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1649',message:'calculating result',data:{roundId:round.id,amount:amount,winRate:winRate,isWin:isWin},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // Debug logging disabled
+        // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1649',message:'calculating result',data:{roundId:round.id,amount:amount,winRate:winRate,isWin:isWin},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
         // #endregion
         const profit = calculateProfit(amount, isWin);
         
@@ -2891,7 +3159,8 @@ async function finishRoundOnClient(round) {
         // 3. Отправляем результат на сервер
         const finishUrl = `${window.API_BASE}/rounds/${round.id}/finish`;
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1656',message:'sending finish request',data:{url:finishUrl,roundId:round.id,win:isWin,profit:profit},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // Debug logging disabled
+        // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1656',message:'sending finish request',data:{url:finishUrl,roundId:round.id,win:isWin,profit:profit},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
         // #endregion
         const finishResponse = await fetch(finishUrl, {
             method: 'POST',
@@ -2905,7 +3174,8 @@ async function finishRoundOnClient(round) {
         });
         
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1667',message:'finish response',data:{roundId:round.id,ok:finishResponse.ok,status:finishResponse.status,statusText:finishResponse.statusText},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // Debug logging disabled
+        // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1667',message:'finish response',data:{roundId:round.id,ok:finishResponse.ok,status:finishResponse.status,statusText:finishResponse.statusText},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
         // #endregion
         
         if (!finishResponse.ok) {
@@ -2918,7 +3188,8 @@ async function finishRoundOnClient(round) {
         console.log(`✅ [finishRoundOnClient] Round finished on server, new balance: ${newBalance}`);
         
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1672',message:'before UI update',data:{roundId:round.id,oldBalance:userBalance,newBalance:newBalance},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // Debug logging disabled
+        // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1672',message:'before UI update',data:{roundId:round.id,oldBalance:userBalance,newBalance:newBalance},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
         // #endregion
         
         // 4. Обновляем UI
@@ -2927,7 +3198,8 @@ async function finishRoundOnClient(round) {
         updateMobileV2Balance();
         
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1678',message:'after balance update',data:{roundId:round.id,userBalance:userBalance},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // Debug logging disabled
+        // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1678',message:'after balance update',data:{roundId:round.id,userBalance:userBalance},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
         // #endregion
         
         // Удаляем раунд из активных
@@ -2977,7 +3249,8 @@ async function finishRoundOnClient(round) {
     } catch (error) {
         console.error(`❌ [finishRoundOnClient] Error finishing round ${round.id}:`, error);
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1710',message:'finishRoundOnClient error',data:{roundId:round.id,error:error.message,errorStack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // Debug logging disabled
+        // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:1710',message:'finishRoundOnClient error',data:{roundId:round.id,error:error.message,errorStack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
         // #endregion
         // В случае ошибки все равно удаляем раунд из активных и останавливаем таймер
         activeRounds = activeRounds.filter(r => r.id !== round.id);
@@ -3344,7 +3617,8 @@ function openMobileTabs() {
     
     mobileTabs.style.display = 'block';
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2334',message:'openMobileTabs: setting display block',data:{display:mobileTabs.style.display,selectedPairsCount:selectedPairs.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // Debug logging disabled
+    // fetch('http://127.0.0.1:7242/ingest/9e25f0d9-b883-4cae-b9d4-faaf8661b268',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app.js:2334',message:'openMobileTabs: setting display block',data:{display:mobileTabs.style.display,selectedPairsCount:selectedPairs.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
     // #endregion
 }
 

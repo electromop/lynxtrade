@@ -982,6 +982,30 @@ async function loadChartData(pairId, timeframe) {
                 currentCandleData.set(pairId, {...lastCandle});
                 console.log(`📊 Set lastCandleTime to: ${lastCandle.time} for pair ${pairId}`);
             }
+            
+            // Центрируем график к середине данных после загрузки
+            setTimeout(() => {
+                try {
+                    const timeScale = chartData.chart.timeScale();
+                    if (timeScale) {
+                        // Прокручиваем к середине данных (позиция 0.5 = 50%)
+                        if (typeof timeScale.scrollToPosition === 'function') {
+                            timeScale.scrollToPosition(0.5, false);
+                            console.log(`📊 Centered chart to middle position for pair ${pairId}`);
+                        } else if (typeof timeScale.scrollToTime === 'function') {
+                            // Альтернативный способ: прокрутка к времени средней свечи
+                            const middleIndex = Math.floor(dataToSet.length / 2);
+                            const middleCandle = dataToSet[middleIndex];
+                            if (middleCandle && typeof middleCandle.time === 'number') {
+                                timeScale.scrollToTime(middleCandle.time);
+                                console.log(`📊 Centered chart to middle candle time ${middleCandle.time} for pair ${pairId}`);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`⚠️ Could not center chart for pair ${pairId}:`, error);
+                }
+            }, 100); // Небольшая задержка для завершения рендеринга
         }
         
     } catch (error) {
